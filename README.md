@@ -1,5 +1,7 @@
 # RH
 
+[![Lean CI](https://github.com/beanapologist/RH/actions/workflows/lean-ci.yml/badge.svg?branch=main)](https://github.com/beanapologist/RH/actions/workflows/lean-ci.yml)
+
 This repository contains a Lean 4 / Mathlib formalization of a conditional proof
 of the Riemann Hypothesis.
 
@@ -24,3 +26,7 @@ Packaged endpoint:
 Explicit reduction theorem:
 
 - `RH_reduction_to_rigidity_boundary`
+
+CI/CD:
+
+- GitHub Actions workflow: `.github/workflows/lean-ci.yml`
