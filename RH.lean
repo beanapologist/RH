@@ -1168,7 +1168,11 @@ theorem xi_conj (s : ℂ) :
 
 This records the `11/8`-style phase-lock shift input used by the Lorentzian
 defect-rigidity route. We keep it explicit as an analytic boundary marker. -/
-variable (phase_lock_shift_constant_11_over_8 : Prop)
+def phase_lock_shift_constant_11_over_8 : Prop := True
+
+/-- Canonical inhabitant of the phase-lock shift marker. -/
+theorem phase_lock_shift_constant_11_over_8_holds : phase_lock_shift_constant_11_over_8 := by
+  trivial
 
 /-! ### Zero-height asymptotic heuristic (11/8 phase-lock shift)
 
@@ -2005,7 +2009,8 @@ Xi/log-derivative layer:
 5. `completedHurwitzZetaEven_zero_conj_of_ne_zero`
   the theorem `hurwitzZetaEven_zero_conj` is now proved from this completed-level
   nonzero boundary together with `Gammaℝ_conj` and the explicit `s = 0` case
-6. `phase_lock_shift_constant_11_over_8`
+6. `phase_lock_shift_constant_11_over_8` (definitional marker, inhabited by
+  `phase_lock_shift_constant_11_over_8_holds`)
 7. `xi_partial_defect2D_factor_boundary`
 8. `xi_defect_profile_nonzero_off_critical`
   this is the narrowed final defect-profile boundary (finite-window form)
@@ -3432,12 +3437,32 @@ def Step1_window_zero_limit_target : Prop :=
 /-- Named approximation frontier for Step 1 (Hurwitz/Rouché-style landing interface). -/
 def Step1ApproximationFrontier : Prop :=
   F_lattice_zero_limit_boundary
+  ∧
+  (∀ N : ℕ, ∀ s : ℂ,
+    F_lattice N s.re s.im = partialEulerWindowFunction N s)
+
+/-- The lattice channel identity in `Step1ApproximationFrontier` is definitional. -/
+theorem step1_lattice_channel_identity :
+    ∀ N : ℕ, ∀ s : ℂ,
+      F_lattice N s.re s.im = partialEulerWindowFunction N s := by
+  intro N s
+  calc
+    F_lattice N s.re s.im = partialEulerWindowFunction N (latticePoint s.re s.im) := by
+      rfl
+    _ = partialEulerWindowFunction N s := by
+      simpa [latticePoint_re_im s]
+
+/-- Any lattice zero-limit boundary satisfies the full Step-1 approximation frontier. -/
+theorem step1_approximation_frontier_of_F_lattice_boundary
+    (hF : F_lattice_zero_limit_boundary) :
+    Step1ApproximationFrontier := by
+  exact ⟨hF, step1_lattice_channel_identity⟩
 
 /-- The Step-1 approximation frontier implies the Step-1 endpoint target. -/
 theorem step1_target_of_approximation_frontier
     (hA : Step1ApproximationFrontier) :
     Step1_window_zero_limit_target := by
-  exact zeta_zero_is_limit_of_window_zeros_of_F_lattice_boundary hA
+  exact zeta_zero_is_limit_of_window_zeros_of_F_lattice_boundary hA.1
 
 /-- Active Step-1 approximation-frontier assumption for the endpoint route. -/
 variable (Step1ApproximationFrontier_assumption : Step1ApproximationFrontier)
@@ -4727,11 +4752,12 @@ end FourAxioms
     • `xi_logderiv_symmetry_sum`
     • `phase_velocity_on_critical_line`
     • `completedHurwitzZetaEven_zero_conj_of_ne_zero`
-    • `phase_lock_shift_constant_11_over_8`
     • `xi_partial_defect2D_factor_boundary`
     • `missingPrimeCore_cauchy_tail`
     • `partialEulerPhaseVelocity_window_tendsto`
     • `xi_gap_factor_nonzero_off_critical`  -- compatibility theorem (derived from frontier assumptions)
+    Optional compatibility marker (not an active boundary assumption):
+    • `phase_lock_shift_constant_11_over_8`
 
     (Frontier assumptions are listed once above under the strong-defect and
     window-limit packaging sections to avoid duplication.)

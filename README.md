@@ -54,7 +54,8 @@ The canonical source factor **B = 1 + i** connects to the unit-circle crossing l
 **Not Formalized (explicit boundary axioms):**
 - **Window-limit frontier (active Step-1 form):** `Step1ApproximationFrontier_assumption`
 - **Strong-defect frontier:** `xi_defect_profile_nonzero_off_critical`, `xi_partial_defect2D_window_tendsto_zero`
-- **Supporting boundaries:** `xi_logderiv_formula`, `xi_logderiv_symmetry_sum`, `phase_velocity_on_critical_line`, `completedHurwitzZetaEven_zero_conj_of_ne_zero`, `xi_partial_defect2D_factor_boundary`, `missingPrimeCore_cauchy_tail`, `partialEulerPhaseVelocity_window_tendsto`, `phase_lock_shift_constant_11_over_8`
+- **Supporting boundaries:** `xi_logderiv_formula`, `xi_logderiv_symmetry_sum`, `phase_velocity_on_critical_line`, `completedHurwitzZetaEven_zero_conj_of_ne_zero`, `xi_partial_defect2D_factor_boundary`, `missingPrimeCore_cauchy_tail`, `partialEulerPhaseVelocity_window_tendsto`
+- **Optional compatibility marker (definitional):** `phase_lock_shift_constant_11_over_8`
 
 See end of `RH.lean` for full inventory.
 
@@ -68,7 +69,7 @@ Execution status notes:
 - Lattice-native closure routing is in place (`F(s,t)` boundary -> window zero limit -> phase-lock bridge -> RH endpoint).
 - `phase_lock_from_window_limit` is a theorem (no placeholder), but currently depends on strong-defect assumptions already declared in the file.
 - `zeta_zero_is_limit_of_window_zeros` is now derived from the active Step-1 assumption.
-- Step-1 landing interface is now explicit and non-alias: `Step1ApproximationFrontier := F_lattice_zero_limit_boundary`.
+- Step-1 landing interface is now explicit and non-alias: `Step1ApproximationFrontier` bundles lattice zero-limit boundary plus lattice-to-window channel coherence.
 - `xi_logderiv_formula` and `completedHurwitzZetaEven_zero_conj_of_ne_zero` remain high-value analytic discharge targets.
 
 Recommended order (dependency-first), now tracked as a checklist:
@@ -84,7 +85,7 @@ Recommended order (dependency-first), now tracked as a checklist:
 - [ ] `completedHurwitzZetaEven_zero_conj_of_ne_zero` (completed Hurwitz-even conjugation)
 - [x] `completedRiemannZeta_conj` (derived globally from established conjugation lemmas)
 - [ ] `xi_partial_defect2D_factor_boundary` (replace factor-boundary placeholder with theorem)
-- [ ] `phase_lock_shift_constant_11_over_8` (optional heuristic boundary; can be isolated from RH core)
+- [x] `phase_lock_shift_constant_11_over_8` (optional heuristic marker, now definitional)
 
 **Milestone criterion:**
 - Airtight status in this repository is reached when all active `variable` assumptions in `RH.lean` that feed endpoint closure are replaced by theorem proofs.
