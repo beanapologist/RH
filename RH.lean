@@ -834,11 +834,6 @@ lemma xi_conj_of_factor_conj
           * riemannZeta (Complex.conj s) := by
             ring
 
-/-- Critical-line phase-velocity relation (t-derivative form). -/
-variable (phase_velocity_on_critical_line : ∀ t : ℝ,
-    deriv (fun u : ℝ => Complex.log (xi ((1 / 2 : ℂ) + u * Complex.I))) t
-  = Complex.I * xi_logderiv_core_on_line t)
-
 /-- Derived phase-velocity relation from the ξ log-derivative scaffold.
 
 This theorem shows item 3 follows from item 1 once two analytic side conditions
@@ -875,17 +870,25 @@ theorem phase_velocity_on_critical_line_of_xi_logderiv_formula
           rw [hxi]
 
 /-- Correct real-part split from `d/dt log F = i * core`: `Re = -Im(core)`. -/
-lemma phase_velocity_real_split (t : ℝ) :
+lemma phase_velocity_real_split
+    (hPhase : ∀ t : ℝ,
+      deriv (fun u : ℝ => Complex.log (xi ((1 / 2 : ℂ) + u * Complex.I))) t
+        = Complex.I * xi_logderiv_core_on_line t)
+    (t : ℝ) :
     (deriv (fun u : ℝ => Complex.log (xi ((1 / 2 : ℂ) + u * Complex.I))) t).re
       = -(xi_logderiv_core_on_line t).im := by
-  rw [phase_velocity_on_critical_line]
+  rw [hPhase t]
   simp [Complex.mul_re]
 
 /-- Correct imaginary-part split from `d/dt log F = i * core`: `Im = Re(core)`. -/
-lemma phase_velocity_imag_split (t : ℝ) :
+lemma phase_velocity_imag_split
+    (hPhase : ∀ t : ℝ,
+      deriv (fun u : ℝ => Complex.log (xi ((1 / 2 : ℂ) + u * Complex.I))) t
+        = Complex.I * xi_logderiv_core_on_line t)
+    (t : ℝ) :
     (deriv (fun u : ℝ => Complex.log (xi ((1 / 2 : ℂ) + u * Complex.I))) t).im
       = (xi_logderiv_core_on_line t).re := by
-  rw [phase_velocity_on_critical_line]
+  rw [hPhase t]
   simp [Complex.mul_im]
 
 /-- Functional equation boundary: ξ(s) = ξ(1-s). -/
@@ -1996,7 +1999,8 @@ Xi/log-derivative layer:
 1. `xi_logderiv_formula`
 2. `xi_logderiv_symmetry_sum` (prototype target; currently represented by
   `xi_logderiv_symmetry_sum_of_xi_logderiv_formula` with explicit reflected-logderiv input)
-3. `phase_velocity_on_critical_line`
+3. `phase_velocity_on_critical_line` (consumed by
+   `step1_phase_velocity_identity_of_assumption` into Step-1 frontier)
 4. `completedRiemannZeta_factor_bridge_at_exceptional_lattice` (DISCHARGED)
   this boundary is now a proved theorem (`simp` on lattice sites `s = -2n`)
   and feeds directly into the global bridge theorem
@@ -3437,6 +3441,12 @@ def Step1VelocityTransferSchema : Prop :=
     Filter.Tendsto (fun N : ℕ => partialEulerPhaseVelocity_window N t θ)
       Filter.atTop (nhds (xi_logderiv_core_on_line t))
 
+/-- Critical-line phase-velocity identity schema used by the analytic lock bridge. -/
+def Step1PhaseVelocityIdentitySchema : Prop :=
+  ∀ t : ℝ,
+    deriv (fun u : ℝ => Complex.log (xi ((1 / 2 : ℂ) + u * Complex.I))) t
+      = Complex.I * xi_logderiv_core_on_line t
+
 /-- Zero-stability transfer: local lattice zero capture upgrades to a convergent
 window-zero sequence at each zeta zero. -/
 def Step1ZeroStabilityTransfer : Prop :=
@@ -3452,6 +3462,7 @@ def Step1ApproximationFrontier : Prop :=
   ∧ Step1ZeroStabilityTransfer
   ∧ Step1TailControlSchema
   ∧ Step1VelocityTransferSchema
+  ∧ Step1PhaseVelocityIdentitySchema
   ∧
   (∀ N : ℕ, ∀ s : ℂ,
     F_lattice N s.re s.im = partialEulerWindowFunction N s)
@@ -3511,6 +3522,15 @@ theorem step1_velocity_transfer_of_partialEulerPhaseVelocity_window_tendsto
   intro t θ
   exact hVel t θ
 
+/-- The direct critical-line phase-velocity identity implies the Step-1 phase-velocity schema. -/
+theorem step1_phase_velocity_identity_of_assumption
+    (hPhase : ∀ t : ℝ,
+      deriv (fun u : ℝ => Complex.log (xi ((1 / 2 : ℂ) + u * Complex.I))) t
+        = Complex.I * xi_logderiv_core_on_line t) :
+    Step1PhaseVelocityIdentitySchema := by
+  intro t
+  exact hPhase t
+
 /-- The lattice channel identity in `Step1ApproximationFrontier` is definitional. -/
 theorem step1_lattice_channel_identity :
     ∀ N : ℕ, ∀ s : ℂ,
@@ -3531,24 +3551,35 @@ theorem step1_approximation_frontier_of_F_lattice_boundary
         ‖missingPrimeCore N₁ N₂ t θ‖ < ε)
     (hVel : (t θ : ℝ) :
       Filter.Tendsto (fun N : ℕ => partialEulerPhaseVelocity_window N t θ)
-        Filter.atTop (nhds (xi_logderiv_core_on_line t))) :
+        Filter.atTop (nhds (xi_logderiv_core_on_line t)))
+    (hPhase : ∀ t : ℝ,
+      deriv (fun u : ℝ => Complex.log (xi ((1 / 2 : ℂ) + u * Complex.I))) t
+        = Complex.I * xi_logderiv_core_on_line t) :
     Step1ApproximationFrontier := by
   exact ⟨hF, step1_local_approximation_of_F_lattice_boundary hF,
     step1_zero_stability_transfer_of_F_lattice_boundary hF,
     step1_tail_control_of_missingPrimeCore_cauchy_tail hTail,
     step1_velocity_transfer_of_partialEulerPhaseVelocity_window_tendsto hVel,
+    step1_phase_velocity_identity_of_assumption hPhase,
     step1_lattice_channel_identity⟩
 
 /-- The Step-1 approximation frontier implies the Step-1 endpoint target. -/
 theorem step1_target_of_approximation_frontier
     (hA : Step1ApproximationFrontier) :
     Step1_window_zero_limit_target := by
-  rcases hA with ⟨_hF, _hLocal, hZero, _hTail, _hVel, _hChan⟩
+  rcases hA with ⟨_hF, _hLocal, hZero, _hTail, _hVel, _hPhase, _hChan⟩
   intro s hz
   rcases hZero s hz with ⟨sN, hsNzero, hsNtendsto⟩
   refine ⟨sN, ?_, hsNtendsto⟩
   intro N
   simpa [zeros_of_partial] using hsNzero N
+
+/-- Projection from the Step-1 frontier to the critical-line phase-velocity identity. -/
+theorem step1_phase_velocity_identity_of_approximation_frontier
+    (hA : Step1ApproximationFrontier) :
+    Step1PhaseVelocityIdentitySchema := by
+  rcases hA with ⟨_hF, _hLocal, _hZero, _hTail, _hVel, hPhase, _hChan⟩
+  exact hPhase
 
 /-- Active Step-1 approximation-frontier assumption for the endpoint route. -/
 variable (Step1ApproximationFrontier_assumption : Step1ApproximationFrontier)
@@ -4179,7 +4210,10 @@ lemma geometric_phase_lock_holds : geometric_phase_lock := by
 
 /-- The analytic phase lock follows from the ξ phase-velocity decomposition. -/
 lemma analytic_phase_lock_holds (t : ℝ) : analytic_phase_lock t := by
-  exact ⟨phase_velocity_real_split t, phase_velocity_imag_split t⟩
+  have hPhase : Step1PhaseVelocityIdentitySchema :=
+    step1_phase_velocity_identity_of_approximation_frontier
+      Step1ApproximationFrontier_assumption
+  exact ⟨phase_velocity_real_split hPhase t, phase_velocity_imag_split hPhase t⟩
 
 /-- Combined bridge theorem:
 the original geometric lock, the analytic lock, and critical-line ξ-realness
@@ -4850,7 +4884,6 @@ end FourAxioms
 
     Supporting analytic boundaries (outside the minimal endpoint frontier):
     • `xi_logderiv_formula`
-    • `phase_velocity_on_critical_line`
     • `completedHurwitzZetaEven_zero_conj_of_ne_zero`
     • `xi_gap_factor_nonzero_off_critical`  -- compatibility theorem (derived from frontier assumptions)
     Prototype target (currently not an active global assumption):
@@ -4859,6 +4892,7 @@ end FourAxioms
     • `missingPrimeCore_cauchy_tail` -> `step1_tail_control_of_missingPrimeCore_cauchy_tail`
     • `partialEulerPhaseVelocity_window_tendsto` ->
       `step1_velocity_transfer_of_partialEulerPhaseVelocity_window_tendsto`
+    • `phase_velocity_on_critical_line` -> `step1_phase_velocity_identity_of_assumption`
     Optional compatibility marker (not an active boundary assumption):
     • `phase_lock_shift_constant_11_over_8`
     Localized compatibility input (not active globally):
