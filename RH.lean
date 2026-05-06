@@ -7,7 +7,6 @@
 
   Build:   lake env lean Framework.lean
   Project: lakefile.lean depending on `mathlib`
-
   Honest accounting at top:
     * The geometric framework, canonical factorization, coherence identities,
       prime-wise decomposition, finite-window refinement identities, and the
@@ -115,6 +114,14 @@ theorem B_abs : Complex.abs B_canonical = Real.sqrt 2 := by
   simp [Complex.normSq]
   -- 1² + 1² = 2, sqrt 2
   rfl
+
+/-- Silver-ratio identity at the canonical source:
+`Re(B) + |B| = 1 + √2` for `B = 1 + i`. -/
+theorem silver_ratio_eq_re_B_add_abs_B :
+    B_canonical.re + Complex.abs B_canonical = 1 + Real.sqrt 2 := by
+  unfold B_canonical
+  rw [B_abs]
+  norm_num
 
 theorem B_canonical_arg : Complex.arg B_canonical = Real.pi / 4 := by
   have hθ : (Real.pi / 4 : ℝ) ∈ Set.Ioc (-Real.pi) Real.pi := by
@@ -326,6 +333,30 @@ is the n-th metallic mean.  Silver = (n=1), Golden = (n=1/2). -/
 
 /-- The n-th metallic mean as a real number. -/
 noncomputable def metallic (n : ℝ) : ℝ := n + Real.sqrt (n^2 + 1)
+
+/-- Parameterized source family for metallic geometry: `B_n = n + i`. -/
+noncomputable def B_metallic (n : ℝ) : ℂ :=
+  (n : ℂ) + Complex.I
+
+/-- The modulus of `B_n = n + i` is `√(n²+1)`. -/
+theorem B_metallic_abs (n : ℝ) :
+    Complex.abs (B_metallic n) = Real.sqrt (n ^ 2 + 1) := by
+  unfold B_metallic
+  rw [Complex.abs_def]
+  simp [Complex.normSq]
+
+/-- General metallic identity:
+`metallic n = Re(B_n) + |B_n|` for `B_n = n + i`. -/
+theorem metallic_eq_re_B_metallic_add_abs_B_metallic (n : ℝ) :
+    metallic n = (B_metallic n).re + Complex.abs (B_metallic n) := by
+  unfold metallic B_metallic
+  rw [B_metallic_abs]
+  ring
+
+/-- Equivalent orientation of the same identity (often convenient for rewriting). -/
+theorem re_B_metallic_add_abs_B_metallic_eq_metallic (n : ℝ) :
+    (B_metallic n).re + Complex.abs (B_metallic n) = metallic n := by
+  simpa using (metallic_eq_re_B_metallic_add_abs_B_metallic n).symm
 
 /-- Silver ratio:  metallic 1 = 1 + √2. -/
 theorem silver_eq : metallic 1 = 1 + Real.sqrt 2 := by
@@ -675,6 +706,65 @@ variable (xi_logderiv_symmetry_sum : ∀ s : ℂ,
       - (deriv riemannZeta s / riemannZeta s
         + deriv riemannZeta (1 - s) / riemannZeta (1 - s)))
 
+/-- Item-2 reduction prototype:
+the symmetric digamma/zeta sum follows from item 1 once one has
+the reflected ξ-log-derivative relation `Lξ(1-s) = -Lξ(s)`. -/
+theorem xi_logderiv_symmetry_sum_of_xi_logderiv_formula
+    (hxi_reflect_logderiv : ∀ s : ℂ,
+      deriv xi (1 - s) / xi (1 - s) = -(deriv xi s / xi s)) :
+    ∀ s : ℂ,
+      (1 / 2 : ℂ) * (digamma (s / 2) + digamma ((1 - s) / 2))
+        = (Real.log Real.pi : ℂ)
+        - (deriv riemannZeta s / riemannZeta s
+          + deriv riemannZeta (1 - s) / riemannZeta (1 - s)) := by
+  intro s
+  have hs :
+      deriv xi s / xi s
+        = (1 : ℂ) / s
+          + (1 : ℂ) / (s - 1)
+          - ((Real.log Real.pi) / 2 : ℂ)
+          + (1 / 2 : ℂ) * digamma (s / 2)
+          + deriv riemannZeta s / riemannZeta s :=
+    xi_logderiv_formula s
+  have h1s :
+      deriv xi (1 - s) / xi (1 - s)
+        = (1 : ℂ) / (1 - s)
+          + (1 : ℂ) / ((1 - s) - 1)
+          - ((Real.log Real.pi) / 2 : ℂ)
+          + (1 / 2 : ℂ) * digamma ((1 - s) / 2)
+          + deriv riemannZeta (1 - s) / riemannZeta (1 - s) :=
+    xi_logderiv_formula (1 - s)
+  have h1s' :
+      -(deriv xi s / xi s)
+        = (1 : ℂ) / (1 - s)
+          + (1 : ℂ) / ((1 - s) - 1)
+          - ((Real.log Real.pi) / 2 : ℂ)
+          + (1 / 2 : ℂ) * digamma ((1 - s) / 2)
+          + deriv riemannZeta (1 - s) / riemannZeta (1 - s) := by
+    simpa [hxi_reflect_logderiv s] using h1s
+  have hadd := congrArg2 (fun a b : ℂ => a + b) hs h1s'
+  have hAplusB :
+      (1 / 2 : ℂ) * (digamma (s / 2) + digamma ((1 - s) / 2))
+        + (deriv riemannZeta s / riemannZeta s
+            + deriv riemannZeta (1 - s) / riemannZeta (1 - s))
+      = (Real.log Real.pi : ℂ) := by
+    have h0 :
+        (0 : ℂ)
+          = -((Real.log Real.pi) : ℂ)
+            + ((1 / 2 : ℂ) * (digamma (s / 2) + digamma ((1 - s) / 2)))
+            + (deriv riemannZeta s / riemannZeta s
+                + deriv riemannZeta (1 - s) / riemannZeta (1 - s)) := by
+      simpa [sub_eq_add_neg, add_assoc, add_left_comm, add_comm, div_eq_mul_inv] using hadd
+    have h := congrArg (fun z : ℂ => z + (Real.log Real.pi : ℂ)) h0
+    have h' :
+        (Real.log Real.pi : ℂ)
+          = (1 / 2 : ℂ) * (digamma (s / 2) + digamma ((1 - s) / 2))
+              + (deriv riemannZeta s / riemannZeta s
+                  + deriv riemannZeta (1 - s) / riemannZeta (1 - s)) := by
+      simpa [sub_eq_add_neg, add_assoc, add_left_comm, add_comm] using h
+    exact h'.symm
+  exact (eq_sub_iff_add_eq).2 hAplusB
+
 /-- Core log-derivative bracket evaluated on the critical line. -/
 noncomputable def xi_logderiv_core_on_line (t : ℝ) : ℂ :=
   (1 : ℂ) / ((1 / 2 : ℂ) + t * Complex.I)
@@ -755,6 +845,41 @@ lemma xi_conj_of_factor_conj
 variable (phase_velocity_on_critical_line : ∀ t : ℝ,
     deriv (fun u : ℝ => Complex.log (xi ((1 / 2 : ℂ) + u * Complex.I))) t
   = Complex.I * xi_logderiv_core_on_line t)
+
+/-- Derived phase-velocity relation from the ξ log-derivative scaffold.
+
+This theorem shows item 3 follows from item 1 once two analytic side conditions
+are provided explicitly:
+1. chain-rule derivative of `u ↦ xi(1/2 + u i)` along the real line,
+2. slit-plane branch admissibility for `log ∘ xi` on that line. -/
+theorem phase_velocity_on_critical_line_of_xi_logderiv_formula
+    (hlineDeriv : ∀ t : ℝ,
+      HasDerivAt (fun u : ℝ => xi ((1 / 2 : ℂ) + u * Complex.I))
+        (Complex.I * deriv xi ((1 / 2 : ℂ) + t * Complex.I)) t)
+    (hlineSlit : ∀ t : ℝ,
+      xi ((1 / 2 : ℂ) + t * Complex.I) ∈ Complex.slitPlane) :
+    ∀ t : ℝ,
+      deriv (fun u : ℝ => Complex.log (xi ((1 / 2 : ℂ) + u * Complex.I))) t
+        = Complex.I * xi_logderiv_core_on_line t := by
+  intro t
+  let s : ℂ := (1 / 2 : ℂ) + t * Complex.I
+  have hlogDeriv :
+      deriv (fun u : ℝ => Complex.log (xi ((1 / 2 : ℂ) + u * Complex.I))) t
+        = (Complex.I * deriv xi s) / xi s := by
+    have hHas :
+        HasDerivAt (fun u : ℝ => Complex.log (xi ((1 / 2 : ℂ) + u * Complex.I)))
+          ((Complex.I * deriv xi s) / xi s) t := by
+      simpa [s] using (HasDerivAt.clog_real (hlineDeriv t) (hlineSlit t))
+    exact hHas.deriv
+  have hxi : deriv xi s / xi s = xi_logderiv_core_on_line t := by
+    simpa [s, xi_logderiv_core_on_line] using xi_logderiv_formula s
+  calc
+    deriv (fun u : ℝ => Complex.log (xi ((1 / 2 : ℂ) + u * Complex.I))) t
+        = (Complex.I * deriv xi s) / xi s := hlogDeriv
+    _ = Complex.I * (deriv xi s / xi s) := by
+          rw [mul_div_assoc]
+    _ = Complex.I * xi_logderiv_core_on_line t := by
+          rw [hxi]
 
 /-- Correct real-part split from `d/dt log F = i * core`: `Re = -Im(core)`. -/
 lemma phase_velocity_real_split (t : ℝ) :
@@ -913,9 +1038,12 @@ lemma Gammaℝ_conj (s : ℂ) :
 variable (completedHurwitzZetaEven_zero_conj_of_ne_zero : ∀ s : ℂ, s ≠ 0 →
   Complex.conj (completedHurwitzZetaEven 0 s) = completedHurwitzZetaEven 0 (Complex.conj s))
 
-/-- Derived conjugation symmetry for the underlying Hurwitz-even function at `a = 0`. -/
-theorem hurwitzZetaEven_zero_conj (s : ℂ) :
-  Complex.conj (hurwitzZetaEven 0 s) = hurwitzZetaEven 0 (Complex.conj s) := by
+/-- Generic conjugation lift from completed Hurwitz-even (`a=0`) to Hurwitz-even (`a=0`). -/
+theorem hurwitzZetaEven_zero_conj_of_completed_boundary
+    (hcompleted : ∀ s : ℂ, s ≠ 0 →
+      Complex.conj (completedHurwitzZetaEven 0 s) = completedHurwitzZetaEven 0 (Complex.conj s))
+    (s : ℂ) :
+    Complex.conj (hurwitzZetaEven 0 s) = hurwitzZetaEven 0 (Complex.conj s) := by
   rcases ne_or_eq s 0 with hs | rfl
   · have hconj : Complex.conj s ≠ 0 := by
       exact Complex.conj_ne_zero.mpr hs
@@ -926,10 +1054,71 @@ theorem hurwitzZetaEven_zero_conj (s : ℂ) :
         = Complex.conj (completedHurwitzZetaEven 0 s) / Complex.conj (Gammaℝ s) := by
             simp [div_eq_mul_inv, map_mul]
       _ = completedHurwitzZetaEven 0 (Complex.conj s) / Gammaℝ (Complex.conj s) := by
-            rw [completedHurwitzZetaEven_zero_conj_of_ne_zero s hs, Gammaℝ_conj]
+            rw [hcompleted s hs, Gammaℝ_conj]
       _ = hurwitzZetaEven 0 (Complex.conj s) := by
             rw [hurwitzZetaEven_def_of_ne_or_ne (a := 0) (s := Complex.conj s) (Or.inr hconj)]
   · simp [hurwitzZetaEven_apply_zero]
+
+/-- Derived conjugation symmetry for the underlying Hurwitz-even function at `a = 0`. -/
+theorem hurwitzZetaEven_zero_conj (s : ℂ) :
+  Complex.conj (hurwitzZetaEven 0 s) = hurwitzZetaEven 0 (Complex.conj s) := by
+  exact hurwitzZetaEven_zero_conj_of_completed_boundary
+    completedHurwitzZetaEven_zero_conj_of_ne_zero s
+
+/-- Prototype replacement interface for item 5:
+it is enough to assume conjugation symmetry for `completedRiemannZeta`. -/
+variable (completedRiemannZeta_conj : ∀ s : ℂ,
+  Complex.conj (completedRiemannZeta s) = completedRiemannZeta (Complex.conj s))
+
+/-- Item-5 boundary as a consequence of `completedRiemannZeta` conjugation symmetry. -/
+theorem completedHurwitzZetaEven_zero_conj_of_ne_zero_of_completedRiemannZeta_conj
+    (s : ℂ) (_hs : s ≠ 0) :
+    Complex.conj (completedHurwitzZetaEven 0 s) = completedHurwitzZetaEven 0 (Complex.conj s) := by
+  simpa [completedRiemannZeta] using completedRiemannZeta_conj s
+
+/-- Alternative derived Hurwitz-even conjugation chain through `completedRiemannZeta` symmetry. -/
+theorem hurwitzZetaEven_zero_conj_of_completedRiemannZeta_conj (s : ℂ) :
+    Complex.conj (hurwitzZetaEven 0 s) = hurwitzZetaEven 0 (Complex.conj s) := by
+  exact hurwitzZetaEven_zero_conj_of_completed_boundary
+    (completedHurwitzZetaEven_zero_conj_of_ne_zero_of_completedRiemannZeta_conj
+      (completedRiemannZeta_conj := completedRiemannZeta_conj)) s
+
+/-- Alternative ζ conjugation chain through `completedRiemannZeta` symmetry. -/
+theorem riemannZeta_conj_of_completedRiemannZeta_conj (s : ℂ) :
+    Complex.conj (riemannZeta s) = riemannZeta (Complex.conj s) := by
+  simpa [riemannZeta] using hurwitzZetaEven_zero_conj_of_completedRiemannZeta_conj
+    (completedRiemannZeta_conj := completedRiemannZeta_conj) s
+
+/-- Reverse prototype direction:
+conjugation symmetry of `riemannZeta` implies conjugation symmetry of `completedRiemannZeta`. -/
+theorem completedRiemannZeta_conj_of_riemannZeta_conj
+    (hriem : ∀ s : ℂ, Complex.conj (riemannZeta s) = riemannZeta (Complex.conj s))
+    (s : ℂ) :
+    Complex.conj (completedRiemannZeta s) = completedRiemannZeta (Complex.conj s) := by
+  have hGammaR :
+      Complex.conj (((Real.pi : ℂ) ^ (-s / 2)) * Complex.Gamma (s / 2))
+        = ((Real.pi : ℂ) ^ (-(Complex.conj s) / 2)) * Complex.Gamma ((Complex.conj s) / 2) := by
+    simpa [Gammaℝ_def, map_mul] using Gammaℝ_conj s
+  calc
+    Complex.conj (completedRiemannZeta s)
+      = Complex.conj (((Real.pi : ℂ) ^ (-s / 2)) * Complex.Gamma (s / 2) * riemannZeta s) := by
+          rw [completedRiemannZeta_factor_bridge s]
+    _ = Complex.conj (((Real.pi : ℂ) ^ (-s / 2)) * Complex.Gamma (s / 2))
+          * Complex.conj (riemannZeta s) := by
+            simp [map_mul]
+    _ = (((Real.pi : ℂ) ^ (-(Complex.conj s) / 2)) * Complex.Gamma ((Complex.conj s) / 2))
+          * riemannZeta (Complex.conj s) := by
+            rw [hGammaR, hriem s]
+    _ = completedRiemannZeta (Complex.conj s) := by
+          simpa using (completedRiemannZeta_factor_bridge (Complex.conj s)).symm
+
+/-- Item-5 prototype route specialized from `riemannZeta` conjugation symmetry. -/
+theorem completedHurwitzZetaEven_zero_conj_of_ne_zero_of_riemannZeta_conj
+    (hriem : ∀ s : ℂ, Complex.conj (riemannZeta s) = riemannZeta (Complex.conj s))
+    (s : ℂ) (hs : s ≠ 0) :
+    Complex.conj (completedHurwitzZetaEven 0 s) = completedHurwitzZetaEven 0 (Complex.conj s) := by
+  exact completedHurwitzZetaEven_zero_conj_of_ne_zero_of_completedRiemannZeta_conj
+    (completedRiemannZeta_conj := completedRiemannZeta_conj_of_riemannZeta_conj hriem) s hs
 
 /-- Derived ζ-factor conjugation from the Hurwitz-even boundary at `a = 0`. -/
 theorem riemannZeta_conj (s : ℂ) :
@@ -1817,16 +2006,31 @@ Xi/log-derivative layer:
   window-defect zero-closure bridge; together with item 8,
   this yields `phase_lock_rigidity_from_2D_defect_boundary_strong`
 
+Reduced boundary core (prototype reductions now formalized):
+1. Item 2 reduces to item 1 plus reflected ξ-log-derivative input:
+  `xi_logderiv_symmetry_sum_of_xi_logderiv_formula`
+2. Item 3 reduces to item 1 plus line chain-rule + slit-plane branch input:
+  `phase_velocity_on_critical_line_of_xi_logderiv_formula`
+3. Item 5 now has two prototype routes:
+  - `completedHurwitzZetaEven_zero_conj_of_ne_zero_of_completedRiemannZeta_conj`
+  - `completedHurwitzZetaEven_zero_conj_of_ne_zero_of_riemannZeta_conj`
+4. Reverse bridge exposed explicitly:
+  `completedRiemannZeta_conj_of_riemannZeta_conj`
+  (used to isolate circularity and minimize independent boundary inputs)
+
 Window-limit closure layer:
 1. `missingPrimeCore_cauchy_tail`
 2. `partialEulerPhaseVelocity_window_tendsto`
-3. `zeta_zero_is_limit_of_window_zeros`
-4. `phase_lock_from_window_limit`
+3. `F_lattice_zero_limit_boundary_assumption`
+4. `zeta_zero_is_limit_of_window_zeros` (derived from item 3)
+5. `phase_lock_from_F_lattice_limit` (via lattice->window conversion)
+6. `phase_lock_from_window_limit`
 
 Endpoint dependency sketch:
 `rh_endpoint_master`
   <- `conditional_RH_via_window_limits_with_bridge`
   <- `conditional_RH_via_window_limits`
+  <- `conditional_RH_via_torus_compatibility_frontier`
   <- `conditional_RH_via_two_axiom_frontier`
   <- `phase_lock_passes_to_limit` (legacy naming)
   <- `phase_lock_passes_to_limit_2D` (Lorentzian 2-D naming bridge)
@@ -1839,8 +2043,14 @@ Minimal strong-defect frontier (alternative route):
 Window-limit packaging frontier (primary route for `conditional_RH_via_window_limits` / `rh_endpoint_master`):
 1. (not used in strong-defect route)
 2. `xi_partial_defect2D_window_tendsto_zero`
-3. `zeta_zero_is_limit_of_window_zeros`
-4. `phase_lock_from_window_limit`
+3. `F_lattice_zero_limit_boundary_assumption`
+4. `phase_lock_from_F_lattice_limit`
+
+Unified torus-compatibility frontier (canonical top-level interface):
+1. `TorusCompatibilityFrontier := StrongDefectFrontier ∧ WindowLimitFrontier`
+2. `torusCompatibilityDefect_tendsto_zero_of_strongDefectFrontier`
+3. `torusPhaseLock_of_window_limit_frontier`
+4. `conditional_RH_via_torus_compatibility_frontier`
 
 Compressed endpoint interface (theorem-level, 2 items):
 1. zero-limit existence (same as item 2 above)
@@ -2090,6 +2300,202 @@ lemma sourcePhase_re (θ : ℝ) :
 lemma sourcePhase_im (θ : ℝ) :
     (sourcePhase θ).im = Real.sin θ := by
   simp [sourcePhase, Complex.exp_mul_I]
+
+/-! ### `Z/8Z` phase-rotation layer
+
+This packages quarter-turn indexing by residues mod `8` and maps each index to
+its unit-circle phase point via `sourcePhase`.
+-/
+
+/-- Residue class index for quarter-turn phases. -/
+abbrev Phase8 := ZMod 8
+
+/-- Angle representative of `k : Z/8Z`, measured in units of `π/4`. -/
+noncomputable def phase8Angle (k : Phase8) : ℝ :=
+  (k.val : ℝ) * (Real.pi / 4)
+
+/-- Unit-circle phase point corresponding to a residue class in `Z/8Z`. -/
+noncomputable def phase8Rotate (k : Phase8) : ℂ :=
+  sourcePhase (phase8Angle k)
+
+/-- Arithmetic checkpoint for the `Z/8Z` phase index: `gcd(3,8)=1`. -/
+lemma gcd_three_eight : Nat.gcd 3 8 = 1 := by
+  decide
+
+/-- Equivalent coprimality form of `gcd(3,8)=1`. -/
+lemma coprime_three_eight : Nat.Coprime 3 8 := by
+  exact Nat.coprime_iff_gcd_eq_one.mpr gcd_three_eight
+
+/-- Multiplication by `3` on `Phase8` (an automorphism since `gcd(3,8)=1`). -/
+def phase8MulBy3 (k : Phase8) : Phase8 :=
+  (3 : Phase8) * k
+
+/-- On `Phase8`, multiplying `1` by `3` gives index `3`. -/
+lemma phase8MulBy3_one : phase8MulBy3 (1 : Phase8) = (3 : Phase8) := by
+  simp [phase8MulBy3]
+
+/-- On `Phase8`, multiplying `5` by `3` gives index `7`. -/
+lemma phase8MulBy3_five : phase8MulBy3 (5 : Phase8) = (7 : Phase8) := by
+  norm_num [phase8MulBy3]
+
+/-- The crossing-pair indices `{1,5}` are sent to `{3,7}` under `k ↦ 3k` in `Phase8`. -/
+lemma phase8MulBy3_maps_crossing_pair
+    (k : Phase8)
+    (hk : k = (1 : Phase8) ∨ k = (5 : Phase8)) :
+    phase8MulBy3 k = (3 : Phase8) ∨ phase8MulBy3 k = (7 : Phase8) := by
+  rcases hk with rfl | rfl
+  · left
+    exact phase8MulBy3_one
+  · right
+    exact phase8MulBy3_five
+
+/-- Membership transport under `k ↦ 3k` between crossing and image pairs in `Phase8`. -/
+lemma phase8MulBy3_crossing_pair_iff_image_pair (k : Phase8) :
+    (k = (1 : Phase8) ∨ k = (5 : Phase8))
+      ↔ (phase8MulBy3 k = (3 : Phase8) ∨ phase8MulBy3 k = (7 : Phase8)) := by
+  constructor
+  · intro hk
+    exact phase8MulBy3_maps_crossing_pair k hk
+  · intro hk
+    have hback :
+        phase8MulBy3 (phase8MulBy3 k) = (1 : Phase8)
+          ∨ phase8MulBy3 (phase8MulBy3 k) = (5 : Phase8) := by
+      rcases hk with h3 | h7
+      · left
+        calc
+          phase8MulBy3 (phase8MulBy3 k) = phase8MulBy3 (3 : Phase8) := by simpa [h3]
+          _ = (1 : Phase8) := by
+            unfold phase8MulBy3
+            norm_num
+      · right
+        calc
+          phase8MulBy3 (phase8MulBy3 k) = phase8MulBy3 (7 : Phase8) := by simpa [h7]
+          _ = (5 : Phase8) := by
+            unfold phase8MulBy3
+            norm_num
+    simpa [phase8MulBy3_self_inverse] using hback
+
+/-- In `Phase8`, `3 * 3 = 1`, so multiplication by `3` is its own inverse. -/
+lemma phase8_three_mul_three : ((3 : Phase8) * (3 : Phase8)) = (1 : Phase8) := by
+  norm_num
+
+/-- The map `k ↦ 3k` on `Phase8` is self-inverse. -/
+lemma phase8MulBy3_self_inverse (k : Phase8) :
+    phase8MulBy3 (phase8MulBy3 k) = k := by
+  unfold phase8MulBy3
+  calc
+    (3 : Phase8) * ((3 : Phase8) * k) = (((3 : Phase8) * (3 : Phase8)) * k) := by
+      simp [mul_assoc]
+    _ = (1 : Phase8) * k := by rw [phase8_three_mul_three]
+    _ = k := by simp
+
+/-- Explicit `Phase8` automorphism induced by multiplication by `3`. -/
+def phase8MulBy3Equiv : Phase8 ≃ Phase8 where
+  toFun := phase8MulBy3
+  invFun := phase8MulBy3
+  left_inv := phase8MulBy3_self_inverse
+  right_inv := phase8MulBy3_self_inverse
+
+/-- Crossing-pair transport expressed via the explicit automorphism `phase8MulBy3Equiv`. -/
+lemma phase8MulBy3Equiv_crossing_pair_iff_image_pair (k : Phase8) :
+    (k = (1 : Phase8) ∨ k = (5 : Phase8))
+      ↔ (phase8MulBy3Equiv k = (3 : Phase8) ∨ phase8MulBy3Equiv k = (7 : Phase8)) := by
+  simpa [phase8MulBy3Equiv] using phase8MulBy3_crossing_pair_iff_image_pair k
+
+/-- Octagon vertex model in the source-phase plane (indexed by `Z/8Z`). -/
+noncomputable def sourceOctagon : Set ℂ :=
+  Set.range phase8Rotate
+
+/-- Every indexed phase point is a vertex of the source octagon. -/
+lemma phase8Rotate_mem_sourceOctagon (k : Phase8) :
+    phase8Rotate k ∈ sourceOctagon := by
+  exact ⟨k, rfl⟩
+
+/-- Reflection shape on `Phase8`: index negation (`k ↦ -k`). -/
+def phase8Reflect (k : Phase8) : Phase8 :=
+  -k
+
+/-- Reflection is involutive on `Phase8`. -/
+lemma phase8Reflect_involutive (k : Phase8) :
+    phase8Reflect (phase8Reflect k) = k := by
+  simp [phase8Reflect]
+
+/-- Reflection sends index `1` to `7` in `Phase8`. -/
+lemma phase8Reflect_one : phase8Reflect (1 : Phase8) = (7 : Phase8) := by
+  norm_num [phase8Reflect]
+
+/-- Reflection sends index `5` to `3` in `Phase8`. -/
+lemma phase8Reflect_five : phase8Reflect (5 : Phase8) = (3 : Phase8) := by
+  norm_num [phase8Reflect]
+
+/-- Reflection transports the crossing pair `{1,5}` to `{7,3}`. -/
+lemma phase8Reflect_maps_crossing_pair
+    (k : Phase8)
+    (hk : k = (1 : Phase8) ∨ k = (5 : Phase8)) :
+    phase8Reflect k = (7 : Phase8) ∨ phase8Reflect k = (3 : Phase8) := by
+  rcases hk with rfl | rfl
+  · left
+    exact phase8Reflect_one
+  · right
+    exact phase8Reflect_five
+
+/-- Reflection commutes with the `×3` automorphism on `Phase8`. -/
+lemma phase8Reflect_commutes_phase8MulBy3 (k : Phase8) :
+    phase8Reflect (phase8MulBy3 k) = phase8MulBy3 (phase8Reflect k) := by
+  simp [phase8Reflect, phase8MulBy3, mul_comm, mul_left_comm, mul_assoc]
+
+/-- D8-like finite control bundle on `Phase8`.
+
+This packages the octagon-indexed rotation/reflection mechanics used in the
+discrete phase-control layer:
+1. `×3` is an involutive automorphism,
+2. reflection is involutive,
+3. reflection commutes with `×3`,
+4. crossing-pair transport under `×3`,
+5. crossing-pair transport under reflection. -/
+theorem phase8_D8_like_control_bundle (k : Phase8)
+    (hk : k = (1 : Phase8) ∨ k = (5 : Phase8)) :
+    phase8MulBy3 (phase8MulBy3 k) = k
+      ∧ phase8Reflect (phase8Reflect k) = k
+      ∧ phase8Reflect (phase8MulBy3 k) = phase8MulBy3 (phase8Reflect k)
+      ∧ (phase8MulBy3 k = (3 : Phase8) ∨ phase8MulBy3 k = (7 : Phase8))
+      ∧ (phase8Reflect k = (7 : Phase8) ∨ phase8Reflect k = (3 : Phase8)) := by
+  refine ⟨phase8MulBy3_self_inverse k, phase8Reflect_involutive k,
+    phase8Reflect_commutes_phase8MulBy3 k, ?_, ?_⟩
+  · exact phase8MulBy3_maps_crossing_pair k hk
+  · exact phase8Reflect_maps_crossing_pair k hk
+
+/-- The generator step in `Z/8Z` corresponds to the `π/4` phase point. -/
+lemma phase8Rotate_one :
+    phase8Rotate (1 : Phase8) = sourcePhase (Real.pi / 4) := by
+  simp [phase8Rotate, phase8Angle]
+
+/-- The residue class `5` corresponds to the `5π/4` phase point. -/
+lemma phase8Rotate_five :
+    phase8Rotate (5 : Phase8) = sourcePhase (5 * Real.pi / 4) := by
+  simp [phase8Rotate, phase8Angle]
+
+/-- Adding `π` flips the source phase to its antipode on the unit circle. -/
+lemma sourcePhase_add_pi (θ : ℝ) :
+    sourcePhase (θ + Real.pi) = -sourcePhase θ := by
+  unfold sourcePhase
+  calc
+    Complex.exp ((θ + Real.pi) * Complex.I)
+        = Complex.exp (θ * Complex.I + Real.pi * Complex.I) := by ring_nf
+    _ = Complex.exp (θ * Complex.I) * Complex.exp (Real.pi * Complex.I) := by
+          simpa using Complex.exp_add (θ * Complex.I) (Real.pi * Complex.I)
+    _ = Complex.exp (θ * Complex.I) * (-1) := by
+          simp [Complex.exp_mul_I]
+    _ = -Complex.exp (θ * Complex.I) := by ring
+
+/-- The two `x = y` crossing classes in `Z/8Z` are antipodal: `1` and `5`. -/
+lemma phase8Rotate_five_eq_neg_phase8Rotate_one :
+    phase8Rotate (5 : Phase8) = -phase8Rotate (1 : Phase8) := by
+  calc
+    phase8Rotate (5 : Phase8) = sourcePhase (5 * Real.pi / 4) := phase8Rotate_five
+    _ = sourcePhase (Real.pi / 4 + Real.pi) := by ring
+    _ = -sourcePhase (Real.pi / 4) := sourcePhase_add_pi (Real.pi / 4)
+    _ = -phase8Rotate (1 : Phase8) := by simpa [phase8Rotate, phase8Angle]
 
 /-- Constant-source statement across two primes:
 the same `B_phase = sourcePhase θ` factors both prime channels. -/
@@ -2847,6 +3253,45 @@ variable (partialEulerPhaseVelocity_window_tendsto :
 noncomputable def partialEulerWindowFunction (N : ℕ) (s : ℂ) : ℂ :=
   partialEulerPhaseCore_window N s.im 0
 
+/-- Lattice coordinate map in the `s`-plane: `s = σ + it`. -/
+noncomputable def latticePoint (σ t : ℝ) : ℂ :=
+  (σ : ℂ) + t * Complex.I
+
+/-- The real coordinate of `latticePoint σ t` is `σ`. -/
+lemma latticePoint_re (σ t : ℝ) :
+    (latticePoint σ t).re = σ := by
+  simp [latticePoint]
+
+/-- The imaginary coordinate of `latticePoint σ t` is `t`. -/
+lemma latticePoint_im (σ t : ℝ) :
+    (latticePoint σ t).im = t := by
+  simp [latticePoint]
+
+/-- `F(s,t)`-style window channel, evaluated on the lattice point `σ + it`. -/
+noncomputable def F_lattice (N : ℕ) (σ t : ℝ) : ℂ :=
+  partialEulerWindowFunction N (latticePoint σ t)
+
+/-- Evaluating the window function on `σ + it` depends only on the `t` channel. -/
+lemma partialEulerWindowFunction_latticePoint (N : ℕ) (σ t : ℝ) :
+    partialEulerWindowFunction N (latticePoint σ t)
+      = partialEulerPhaseCore_window N t 0 := by
+  simp [partialEulerWindowFunction, latticePoint]
+
+/-- Explicit `F(s,t)` identity: the lattice channel is the windowed phase core at `t`. -/
+lemma F_lattice_eq_partialEulerPhaseCore_window (N : ℕ) (σ t : ℝ) :
+    F_lattice N σ t = partialEulerPhaseCore_window N t 0 := by
+  simpa [F_lattice] using partialEulerWindowFunction_latticePoint N σ t
+
+/-- Critical-line specialization of `F(s,t)` at `σ = 1/2`. -/
+lemma F_lattice_on_critical_line (N : ℕ) (t : ℝ) :
+    F_lattice N (1 / 2) t = partialEulerPhaseCore_window N t 0 := by
+  simpa using F_lattice_eq_partialEulerPhaseCore_window N (1 / 2) t
+
+/-- Zero-set lattice form: `σ + it` is a window zero iff `F_lattice N σ t = 0`. -/
+lemma mem_zeros_of_partial_lattice_iff (N : ℕ) (σ t : ℝ) :
+    latticePoint σ t ∈ zeros_of_partial N ↔ F_lattice N σ t = 0 := by
+  simp [zeros_of_partial, F_lattice]
+
 /-- 2-D naming bridge for the window model.
 This keeps the existing implementation while threading the Lorentzian scaffold names. -/
 noncomputable def partialEulerWindowFunction2D (N : ℕ) (s : ℂ) : ℂ :=
@@ -2865,13 +3310,6 @@ lemma partialEulerWindowDefect2D_antisym (N : ℕ) (s : ℂ) :
     partialEulerWindowDefect2D N (lorentzian_reflect s) = -partialEulerWindowDefect2D N s := by
   unfold partialEulerWindowDefect2D lorentzian_reflect
   ring
-
-/-- Hurwitz-style boundary: zeros of ζ are limits of zeros from finite windows. -/
-variable (zeta_zero_is_limit_of_window_zeros :
-    (s : ℂ) (hz : riemannZeta s = 0) :
-    ∃ sN : ℕ → ℂ,
-      (∀ N : ℕ, partialEulerWindowFunction N (sN N) = 0) ∧
-  Filter.Tendsto sN Filter.atTop (nhds s))
 
 /-- Zero set of the `N`-window model. -/
 def zeros_of_partial (N : ℕ) : Set ℂ :=
@@ -2912,6 +3350,114 @@ lemma window_zero_limit_from_2D_names (s : ℂ)
   intro N
   exact (mem_zeros_of_partial_iff_mem_zeros_of_partial2D N (sN N)).2 (hsNzero N)
 
+/-- Every complex point is its own lattice reconstruction from real/imaginary channels. -/
+lemma latticePoint_re_im (s : ℂ) :
+    latticePoint s.re s.im = s := by
+  ext <;> simp [latticePoint]
+
+/-- Convert a complex zero-limit sequence into lattice `F(s,t)` channels. -/
+lemma window_zero_limit_to_F_lattice (s : ℂ)
+    (hlim : ∃ sN : ℕ → ℂ,
+      (∀ N : ℕ, sN N ∈ zeros_of_partial N) ∧
+      Filter.Tendsto sN Filter.atTop (nhds s)) :
+    ∃ σN tN : ℕ → ℝ,
+      (∀ N : ℕ, F_lattice N (σN N) (tN N) = 0) ∧
+      Filter.Tendsto (fun N : ℕ => latticePoint (σN N) (tN N)) Filter.atTop (nhds s) := by
+  rcases hlim with ⟨sN, hsNzero, hsNtendsto⟩
+  refine ⟨(fun N => (sN N).re), (fun N => (sN N).im), ?_, ?_⟩
+  · intro N
+    have hs_zero : sN N ∈ zeros_of_partial N := hsNzero N
+    have hs_lattice_zero : latticePoint (sN N).re (sN N).im ∈ zeros_of_partial N := by
+      simpa [latticePoint_re_im] using hs_zero
+    exact (mem_zeros_of_partial_lattice_iff N (sN N).re (sN N).im).1 hs_lattice_zero
+  · simpa [latticePoint_re_im] using hsNtendsto
+
+/-- Convert lattice `F(s,t)` zero-limit data back to the complex window-zero interface. -/
+lemma window_zero_limit_from_F_lattice (s : ℂ)
+    (hF : ∃ σN tN : ℕ → ℝ,
+      (∀ N : ℕ, F_lattice N (σN N) (tN N) = 0) ∧
+      Filter.Tendsto (fun N : ℕ => latticePoint (σN N) (tN N)) Filter.atTop (nhds s)) :
+    ∃ sN : ℕ → ℂ,
+      (∀ N : ℕ, sN N ∈ zeros_of_partial N) ∧
+      Filter.Tendsto sN Filter.atTop (nhds s) := by
+  rcases hF with ⟨σN, tN, hFzero, hFtendsto⟩
+  refine ⟨fun N => latticePoint (σN N) (tN N), ?_, hFtendsto⟩
+  intro N
+  exact (mem_zeros_of_partial_lattice_iff N (σN N) (tN N)).2 (hFzero N)
+
+/-- F-lattice boundary form: zeta-zeros are limits of finite-window lattice-channel zeros. -/
+def F_lattice_zero_limit_boundary : Prop :=
+  ∀ s : ℂ, riemannZeta s = 0 →
+    ∃ σN tN : ℕ → ℝ,
+      (∀ N : ℕ, F_lattice N (σN N) (tN N) = 0) ∧
+      Filter.Tendsto (fun N : ℕ => latticePoint (σN N) (tN N)) Filter.atTop (nhds s)
+
+/-- Active lattice boundary assumption for the endpoint route. -/
+variable (F_lattice_zero_limit_boundary_assumption : F_lattice_zero_limit_boundary)
+
+/-- Standard window-zero boundary form (complex-sequence channel). -/
+def window_zero_limit_boundary : Prop :=
+  ∀ s : ℂ, riemannZeta s = 0 →
+    ∃ sN : ℕ → ℂ,
+      (∀ N : ℕ, partialEulerWindowFunction N (sN N) = 0) ∧
+      Filter.Tendsto sN Filter.atTop (nhds s)
+
+/-- The `F(s,t)` lattice boundary implies the standard window-zero limit boundary. -/
+theorem zeta_zero_is_limit_of_window_zeros_of_F_lattice_boundary
+    (hF : F_lattice_zero_limit_boundary) :
+    ∀ s : ℂ, riemannZeta s = 0 →
+      ∃ sN : ℕ → ℂ,
+        (∀ N : ℕ, partialEulerWindowFunction N (sN N) = 0) ∧
+        Filter.Tendsto sN Filter.atTop (nhds s) := by
+  intro s hz
+  have hF_at_s :
+      ∃ σN tN : ℕ → ℝ,
+        (∀ N : ℕ, F_lattice N (σN N) (tN N) = 0) ∧
+        Filter.Tendsto (fun N : ℕ => latticePoint (σN N) (tN N)) Filter.atTop (nhds s) :=
+    hF s hz
+  rcases window_zero_limit_from_F_lattice s hF_at_s with ⟨sN, hsNzero, hsNtendsto⟩
+  refine ⟨sN, ?_, hsNtendsto⟩
+  intro N
+  simpa [zeros_of_partial] using hsNzero N
+
+/-- Hurwitz-style boundary, now derived from the active `F(s,t)` lattice assumption. -/
+theorem zeta_zero_is_limit_of_window_zeros
+    (s : ℂ) (hz : riemannZeta s = 0) :
+    ∃ sN : ℕ → ℂ,
+      (∀ N : ℕ, partialEulerWindowFunction N (sN N) = 0) ∧
+      Filter.Tendsto sN Filter.atTop (nhds s) := by
+  exact zeta_zero_is_limit_of_window_zeros_of_F_lattice_boundary
+    F_lattice_zero_limit_boundary_assumption s hz
+
+/-- Boundary equivalence: complex window-zero limits and `F(s,t)` lattice limits are equivalent. -/
+theorem F_lattice_zero_limit_boundary_iff_window_zero_limit_boundary :
+    F_lattice_zero_limit_boundary ↔ window_zero_limit_boundary := by
+  constructor
+  · intro hF
+    exact zeta_zero_is_limit_of_window_zeros_of_F_lattice_boundary hF
+  · intro hW
+    intro s hz
+    rcases hW s hz with ⟨sN, hsNzero, hsNtendsto⟩
+    have hlim :
+        ∃ sN : ℕ → ℂ,
+          (∀ N : ℕ, sN N ∈ zeros_of_partial N) ∧
+          Filter.Tendsto sN Filter.atTop (nhds s) := by
+      refine ⟨sN, ?_, hsNtendsto⟩
+      intro N
+      simpa [zeros_of_partial] using hsNzero N
+    exact window_zero_limit_to_F_lattice s hlim
+
+/-- The standard window-zero limit boundary induces the `F(s,t)` lattice boundary. -/
+theorem F_lattice_zero_limit_boundary_of_zeta_zero_is_limit_of_window_zeros :
+    F_lattice_zero_limit_boundary := by
+  exact (F_lattice_zero_limit_boundary_iff_window_zero_limit_boundary).2
+    zeta_zero_is_limit_of_window_zeros
+
+/-- The current assumptions instantiate the `F(s,t)` lattice zero-limit boundary. -/
+theorem F_lattice_zero_limit_boundary_holds :
+    F_lattice_zero_limit_boundary := by
+  exact F_lattice_zero_limit_boundary_assumption
+
 /-- Bridge boundary: if `s` is a limit of window zeros in the strip,
 then ξ is real at `s` (phase-lock survives the limit).
 
@@ -2936,6 +3482,16 @@ theorem phase_lock_from_window_limit (s : ℂ)
   -- Step 3: xi is real at every critical-line point
   rw [hs_form]
   exact xi_real_on_critical_line s.im
+
+/-- Lattice-channel bridge for phase-lock transfer:
+if `s` is reached by lattice-window zeros in the strip, then ξ is real at `s`. -/
+theorem phase_lock_from_F_lattice_limit (s : ℂ)
+    (hstrip : 0 < s.re ∧ s.re < 1)
+    (hFlim : ∃ σN tN : ℕ → ℝ,
+      (∀ N : ℕ, F_lattice N (σN N) (tN N) = 0) ∧
+      Filter.Tendsto (fun N : ℕ => latticePoint (σN N) (tN N)) Filter.atTop (nhds s)) :
+    xi s ∈ ℝ := by
+  exact phase_lock_from_window_limit s hstrip (window_zero_limit_from_F_lattice s hFlim)
 
 /-- Machine-auditable strong-defect frontier interface.
 
@@ -2972,20 +3528,311 @@ def WindowLimitFrontier : Prop :=
   ∧
   (∀ s : ℂ,
     0 < s.re ∧ s.re < 1 →
+    (∃ σN tN : ℕ → ℝ,
+      (∀ N : ℕ, F_lattice N (σN N) (tN N) = 0) ∧
+      Filter.Tendsto (fun N : ℕ => latticePoint (σN N) (tN N)) Filter.atTop (nhds s)) →
+    xi s ∈ ℝ)
+
+/-- Legacy window-limit packaging interface (complex-sequence phase-lock clause). -/
+def WindowLimitFrontierLegacy : Prop :=
+  (∀ s : ℂ, riemannZeta s = 0 →
+    ∃ sN : ℕ → ℂ,
+      (∀ N : ℕ, partialEulerWindowFunction N (sN N) = 0) ∧
+      Filter.Tendsto sN Filter.atTop (nhds s))
+  ∧
+  (∀ s : ℂ,
+    0 < s.re ∧ s.re < 1 →
     (∃ sN : ℕ → ℂ,
       (∀ N : ℕ, sN N ∈ zeros_of_partial N) ∧
       Filter.Tendsto sN Filter.atTop (nhds s)) →
     xi s ∈ ℝ)
 
+/-- The lattice-native and legacy window-limit frontiers are equivalent. -/
+theorem WindowLimitFrontier_iff_legacy :
+    WindowLimitFrontier ↔ WindowLimitFrontierLegacy := by
+  constructor
+  · intro hW
+    refine ⟨hW.1, ?_⟩
+    intro s hstrip hlim
+    exact hW.2 s hstrip (window_zero_limit_to_F_lattice s hlim)
+  · intro hW
+    refine ⟨hW.1, ?_⟩
+    intro s hstrip hFlim
+    exact hW.2 s hstrip (window_zero_limit_from_F_lattice s hFlim)
+
 /-- The currently declared window-limit assumptions instantiate `WindowLimitFrontier`. -/
 theorem window_limit_frontier_holds : WindowLimitFrontier := by
-  exact ⟨zeta_zero_is_limit_of_window_zeros, phase_lock_from_window_limit⟩
+  refine ⟨zeta_zero_is_limit_of_window_zeros, ?_⟩
+  intro s hstrip hFlim
+  exact phase_lock_from_F_lattice_limit s hstrip hFlim
+
+/-- The `F(s,t)` lattice zero-limit boundary instantiates `WindowLimitFrontier`. -/
+theorem window_limit_frontier_of_F_lattice_boundary
+    (hF : F_lattice_zero_limit_boundary) :
+    WindowLimitFrontier := by
+  refine ⟨?_, ?_⟩
+  · intro s hz
+    exact zeta_zero_is_limit_of_window_zeros_of_F_lattice_boundary hF s hz
+  · intro s hstrip hlim
+    exact phase_lock_from_F_lattice_limit s hstrip (window_zero_limit_to_F_lattice s hlim)
+
+/-- RH closure routed directly from the `F(s,t)` lattice zero-limit boundary. -/
+theorem conditional_RH_via_F_lattice_boundary
+    (hF : F_lattice_zero_limit_boundary) :
+    ∀ s : ℂ, riemannZeta s = 0 → (0 < s.re ∧ s.re < 1) → s.re = 1 / 2 := by
+  exact conditional_RH_via_window_limit_frontier
+    (window_limit_frontier_of_F_lattice_boundary hF)
+
+/-- RH closure via the instantiated `F(s,t)` lattice boundary. -/
+theorem conditional_RH_via_F_lattice :
+    ∀ s : ℂ, riemannZeta s = 0 → (0 < s.re ∧ s.re < 1) → s.re = 1 / 2 := by
+  exact conditional_RH_via_F_lattice_boundary F_lattice_zero_limit_boundary_holds
+
+/-- The current assumptions instantiate the standard window-zero boundary. -/
+theorem window_zero_limit_boundary_holds : window_zero_limit_boundary := by
+  exact zeta_zero_is_limit_of_window_zeros
+
+/-- The standard window-zero boundary instantiates `WindowLimitFrontier`. -/
+theorem window_limit_frontier_of_window_zero_limit_boundary
+    (hW0 : window_zero_limit_boundary) :
+    WindowLimitFrontier := by
+  refine ⟨hW0, ?_⟩
+  intro s hstrip hFlim
+  exact phase_lock_from_window_limit s hstrip (window_zero_limit_from_F_lattice s hFlim)
+
+/-- RH closure routed directly from the standard window-zero boundary. -/
+theorem conditional_RH_via_window_zero_limit_boundary
+    (hW0 : window_zero_limit_boundary) :
+    ∀ s : ℂ, riemannZeta s = 0 → (0 < s.re ∧ s.re < 1) → s.re = 1 / 2 := by
+  exact conditional_RH_via_window_limit_frontier
+    (window_limit_frontier_of_window_zero_limit_boundary hW0)
+
+/-- RH closure via the instantiated standard window-zero boundary. -/
+theorem conditional_RH_via_window_zero_limit :
+    ∀ s : ℂ, riemannZeta s = 0 → (0 < s.re ∧ s.re < 1) → s.re = 1 / 2 := by
+  exact conditional_RH_via_window_zero_limit_boundary window_zero_limit_boundary_holds
+
+/-! ### Torus compatibility layer
+
+This layer packages the shared finite-window compatibility defect as a single
+named object and records how the two frontier interfaces control it.
+-/
+
+/-- Shared torus-compatibility defect magnitude at window `N` and point `s`. -/
+noncomputable def torusCompatibilityDefect (N : ℕ) (s : ℂ) : ℝ :=
+  ‖xi_partial_defect2D (prime_window N) s‖
+
+/-- Torus phase-lock condition at `s`: the centered coordinate vanishes. -/
+def torusPhaseLock (s : ℂ) : Prop :=
+  s.re = 1 / 2
+
+/-- Pointwise zero-detection for the torus defect under a nonzero profile factor.
+
+If at window `N` one has `D_N(s) = x(s) * m` with `m ≠ 0`, then
+`‖D_N(s)‖ = 0` exactly when `x(s)=0`, i.e. exactly on the critical line. -/
+lemma torusCompatibilityDefect_eq_zero_iff_phase_lock_of_profile_nonzero
+    (N : ℕ) (s m : ℂ)
+    (hfac : xi_partial_defect2D (prime_window N) s = ((lorentzian_x s : ℂ)) * m)
+    (hm_ne : m ≠ 0) :
+    torusCompatibilityDefect N s = 0 ↔ torusPhaseLock s := by
+  constructor
+  · intro hzero
+    have hdefect_zero : xi_partial_defect2D (prime_window N) s = 0 := by
+      exact norm_eq_zero.mp (by simpa [torusCompatibilityDefect] using hzero)
+    have hx_zero : ((lorentzian_x s : ℂ)) = 0 := by
+      apply mul_eq_zero.mp
+      exact hfac ▸ hdefect_zero
+      · intro hm
+        exact hm_ne hm
+    exact_mod_cast (show lorentzian_x s = 0 from by exact_mod_cast hx_zero)
+  · intro hlock
+    have hx : (lorentzian_x s : ℂ) = 0 := by
+      exact_mod_cast (show lorentzian_x s = 0 by simpa [torusPhaseLock, lorentzian_x] using hlock)
+    have hdefect_zero : xi_partial_defect2D (prime_window N) s = 0 := by
+      calc
+        xi_partial_defect2D (prime_window N) s = ((lorentzian_x s : ℂ)) * m := hfac
+        _ = 0 := by simp [hx]
+    simpa [torusCompatibilityDefect] using norm_eq_zero.mpr hdefect_zero
+
+/-- Off-critical strip points force an eventual positive lower bound for torus defect.
+
+This is the quantitative incompatibility behind `delta_closure_off_critical_absurd`:
+the defect cannot stay near `0` eventually away from `Re(s)=1/2`. -/
+theorem torusCompatibilityDefect_eventually_ge_pos_off_critical (s : ℂ)
+    (h_nontrivial : 0 < s.re ∧ s.re < 1)
+    (h_off : s.re ≠ 1 / 2) :
+    ∃ c : ℝ, 0 < c ∧ ∃ N0 : ℕ, ∀ N : ℕ, N0 ≤ N → c ≤ torusCompatibilityDefect N s := by
+  rcases xi_defect_profile_nonzero_off_critical s h_nontrivial h_off with
+    ⟨M, hfac, δ, hδ_pos, N0, hδ⟩
+  have hcoef_ne : ((lorentzian_x s : ℂ)) ≠ 0 := by
+    unfold lorentzian_x
+    exact_mod_cast (sub_ne_zero.mpr h_off)
+  have hcoef_norm_pos : 0 < ‖(lorentzian_x s : ℂ)‖ :=
+    norm_pos_iff.mpr hcoef_ne
+  refine ⟨‖(lorentzian_x s : ℂ)‖ * δ, mul_pos hcoef_norm_pos hδ_pos, N0, ?_⟩
+  intro N hN
+  have hnorm_eq :
+      ‖xi_partial_defect2D (prime_window N) s‖ = ‖(lorentzian_x s : ℂ)‖ * ‖M N s‖ := by
+    calc
+      ‖xi_partial_defect2D (prime_window N) s‖ = ‖((lorentzian_x s : ℂ)) * M N s‖ := by
+        simpa [hfac N s]
+      _ = ‖(lorentzian_x s : ℂ)‖ * ‖M N s‖ := by
+        simpa using norm_mul ((lorentzian_x s : ℂ)) (M N s)
+  have hge : ‖(lorentzian_x s : ℂ)‖ * δ ≤ ‖(lorentzian_x s : ℂ)‖ * ‖M N s‖ := by
+    exact mul_le_mul_of_nonneg_left (hδ N hN) (norm_nonneg _)
+  simpa [torusCompatibilityDefect, hnorm_eq] using hge
+
+/-- The strong-defect frontier implies torus-defect closure to `0` at every point. -/
+theorem torusCompatibilityDefect_tendsto_zero_of_strongDefectFrontier
+    (hS : StrongDefectFrontier) (s : ℂ) :
+    Filter.Tendsto (fun N : ℕ => torusCompatibilityDefect N s) Filter.atTop (nhds (0 : ℝ)) := by
+  have hzero :
+      Filter.Tendsto (fun N : ℕ => xi_partial_defect2D (prime_window N) s) Filter.atTop
+        (nhds (0 : ℂ)) :=
+    hS.2 s
+  simpa [torusCompatibilityDefect] using hzero.norm
+
+/-- The window-limit frontier implies torus phase lock at every strip limit-point. -/
+theorem torusPhaseLock_of_window_limit_frontier
+    (hW : WindowLimitFrontier)
+    (s : ℂ)
+    (hstrip : 0 < s.re ∧ s.re < 1)
+    (hlim : ∃ sN : ℕ → ℂ,
+      (∀ N : ℕ, sN N ∈ zeros_of_partial N) ∧
+      Filter.Tendsto sN Filter.atTop (nhds s)) :
+    torusPhaseLock s := by
+  have hreal : xi s ∈ ℝ := hW.2 s hstrip (window_zero_limit_to_F_lattice s hlim)
+  exact xi_real_only_on_critical_line s hstrip hreal
+
+/-- Unified interface: both strong-defect and window-limit frontiers together. -/
+def TorusCompatibilityFrontier : Prop :=
+  StrongDefectFrontier ∧ WindowLimitFrontier
+
+/-- The current axiom set instantiates the unified torus-compatibility frontier. -/
+theorem torusCompatibilityFrontier_holds : TorusCompatibilityFrontier := by
+  exact ⟨strong_defect_frontier_holds, window_limit_frontier_holds⟩
+
+/-- Shape-first dimension-lift frontier.
+
+This packages the geometric ladder
+Circle -> Triangle -> Square -> Torus -> Octagon
+as one machine-auditable interface. -/
+def DimensionLiftFrontier : Prop :=
+  (∀ k : Phase8, phase8Rotate k ∈ sourceOctagon)
+  ∧ (∀ h : ℝ, 0 < h → coherenceC h = 1 / Real.cosh (Real.log h))
+  ∧ (∀ σ : ℝ, reflect σ = σ ↔ σ = 1 / 2)
+  ∧ TorusCompatibilityFrontier
+  ∧ (∀ k : Phase8,
+      (k = (1 : Phase8) ∨ k = (5 : Phase8))
+        → phase8MulBy3 (phase8MulBy3 k) = k
+            ∧ phase8Reflect (phase8Reflect k) = k
+            ∧ phase8Reflect (phase8MulBy3 k) = phase8MulBy3 (phase8Reflect k))
+
+/-- The current development instantiates the shape-first dimension-lift frontier. -/
+theorem dimensionLiftFrontier_holds : DimensionLiftFrontier := by
+  refine ⟨?_, ?_, ?_, torusCompatibilityFrontier_holds, ?_⟩
+  · intro k
+    exact phase8Rotate_mem_sourceOctagon k
+  · intro h hh
+    exact coherenceC_eq_sech_log_h h hh
+  · intro σ
+    exact reflect_fixed_iff σ
+  · intro k hk
+    exact ⟨phase8MulBy3_self_inverse k,
+      phase8Reflect_involutive k,
+      phase8Reflect_commutes_phase8MulBy3 k⟩
+
+/-- Remaining analytic lift obligations for the continuous Euler side.
+
+These are the limit/tail statements that transport finite discrete control to
+the full analytic endpoint. -/
+def DimensionLiftAnalyticObligations : Prop :=
+  (∀ s : ℂ,
+    Filter.Tendsto (fun N : ℕ => xi_partial_defect2D (prime_window N) s) Filter.atTop
+      (nhds (0 : ℂ)))
+  ∧ (∀ t θ : ℝ,
+      ∀ ε > 0, ∃ N0 : ℕ, ∀ N₁ N₂ : ℕ,
+        N0 ≤ N₁ → N₁ ≤ N₂ → ‖missingPrimeCore N₁ N₂ t θ‖ < ε)
+  ∧ (∀ t θ : ℝ,
+      Filter.Tendsto (fun N : ℕ => partialEulerPhaseVelocity_window N t θ) Filter.atTop
+        (nhds (xi_logderiv_core_on_line t)))
+  ∧ (∀ s : ℂ, riemannZeta s = 0 →
+      ∃ sN : ℕ → ℂ,
+        (∀ N : ℕ, partialEulerWindowFunction N (sN N) = 0)
+          ∧ Filter.Tendsto sN Filter.atTop (nhds s))
+
+/-- The current assumptions instantiate the analytic lift-obligation bundle. -/
+theorem dimensionLiftAnalyticObligations_holds : DimensionLiftAnalyticObligations := by
+  exact ⟨xi_partial_defect2D_window_tendsto_zero,
+    missingPrimeCore_cauchy_tail,
+    partialEulerPhaseVelocity_window_tendsto,
+    zeta_zero_is_limit_of_window_zeros⟩
+
+/-- Combined roadmap target: geometric ladder + analytic lift obligations. -/
+def DimensionLiftRoadmapFrontier : Prop :=
+  DimensionLiftFrontier ∧ DimensionLiftAnalyticObligations
+
+/-- The current file instantiates the combined dimension-lift roadmap frontier. -/
+theorem dimensionLiftRoadmapFrontier_holds : DimensionLiftRoadmapFrontier := by
+  exact ⟨dimensionLiftFrontier_holds, dimensionLiftAnalyticObligations_holds⟩
+
+/-- Projection: the shape-first frontier already contains torus compatibility. -/
+lemma torusCompatibilityFrontier_of_dimensionLiftFrontier
+    (hD : DimensionLiftFrontier) :
+    TorusCompatibilityFrontier := by
+  exact hD.2.2.2.1
+
+/-- Dimension-lift collapse theorem:
+every nontrivial-strip zero collapses the 2-D geometry to the 1-D critical axis. -/
+theorem nontrivial_zero_forces_1D_collapse_from_dimensionLiftRoadmap
+    (hDL : DimensionLiftRoadmapFrontier) :
+    ∀ s : ℂ, riemannZeta s = 0 → (0 < s.re ∧ s.re < 1) → s.re = 1 / 2 := by
+  intro s hz hstrip
+  have hT : TorusCompatibilityFrontier :=
+    torusCompatibilityFrontier_of_dimensionLiftFrontier hDL.1
+  exact conditional_RH_via_torus_compatibility_frontier hT s hz hstrip
+
+/-- Off-critical nontrivial-strip zeros are incompatible with the dimension-lift frontier. -/
+theorem nontrivial_zero_off_critical_absurd_from_dimensionLiftRoadmap
+    (hDL : DimensionLiftRoadmapFrontier)
+    (s : ℂ)
+    (hz : riemannZeta s = 0)
+    (hstrip : 0 < s.re ∧ s.re < 1)
+    (h_off : s.re ≠ 1 / 2) : False := by
+  have hcrit : s.re = 1 / 2 :=
+    nontrivial_zero_forces_1D_collapse_from_dimensionLiftRoadmap hDL s hz hstrip
+  exact h_off hcrit
+
+/-- RH closure routed directly through the dimension-lift roadmap frontier. -/
+theorem conditional_RH_via_dimensionLiftRoadmap
+    (hDL : DimensionLiftRoadmapFrontier) :
+    ∀ s : ℂ, riemannZeta s = 0 → (0 < s.re ∧ s.re < 1) → s.re = 1 / 2 := by
+  exact nontrivial_zero_forces_1D_collapse_from_dimensionLiftRoadmap hDL
 
 /-- Single bundled statement of the active endpoint frontier.
 
 This packages exactly the three assumptions used by the RH window-limit closure:
 window-zero limits, phase-lock persistence at the limit, and strip rigidity. -/
 def final_RH_boundary_bundle : Prop :=
+  (∀ s : ℂ, riemannZeta s = 0 →
+    ∃ sN : ℕ → ℂ,
+      (∀ N : ℕ, partialEulerWindowFunction N (sN N) = 0) ∧
+      Filter.Tendsto sN Filter.atTop (nhds s))
+  ∧
+  (∀ s : ℂ,
+    0 < s.re ∧ s.re < 1 →
+    (∃ σN tN : ℕ → ℝ,
+      (∀ N : ℕ, F_lattice N (σN N) (tN N) = 0) ∧
+      Filter.Tendsto (fun N : ℕ => latticePoint (σN N) (tN N)) Filter.atTop (nhds s)) →
+    xi s ∈ ℝ)
+  ∧
+  (∀ s : ℂ,
+    0 < s.re ∧ s.re < 1 →
+    xi s ∈ ℝ →
+    s.re = 1 / 2)
+
+/-- Legacy bundled endpoint frontier (complex-sequence phase-lock clause). -/
+def final_RH_boundary_bundle_legacy : Prop :=
   (∀ s : ℂ, riemannZeta s = 0 →
     ∃ sN : ℕ → ℂ,
       (∀ N : ℕ, partialEulerWindowFunction N (sN N) = 0) ∧
@@ -3003,13 +3850,28 @@ def final_RH_boundary_bundle : Prop :=
     xi s ∈ ℝ →
     s.re = 1 / 2)
 
+/-- Lattice-native and legacy bundled endpoint frontiers are equivalent. -/
+theorem final_RH_boundary_bundle_iff_legacy :
+    final_RH_boundary_bundle ↔ final_RH_boundary_bundle_legacy := by
+  constructor
+  · intro h
+    rcases h with ⟨hzero, hreal, hrigid⟩
+    refine ⟨hzero, ?_, hrigid⟩
+    intro s hstrip hlim
+    exact hreal s hstrip (window_zero_limit_to_F_lattice s hlim)
+  · intro h
+    rcases h with ⟨hzero, hreal, hrigid⟩
+    refine ⟨hzero, ?_, hrigid⟩
+    intro s hstrip hFlim
+    exact hreal s hstrip (window_zero_limit_from_F_lattice s hFlim)
+
 /-- The current file's axioms instantiate the bundled endpoint frontier. -/
 theorem final_RH_boundary_bundle_holds : final_RH_boundary_bundle := by
   refine ⟨?_, ?_, ?_⟩
   · intro s hz
     exact zeta_zero_is_limit_of_window_zeros s hz
-  · intro s hstrip hlim
-    exact phase_lock_from_window_limit s hstrip hlim
+  · intro s hstrip hFlim
+    exact phase_lock_from_F_lattice_limit s hstrip hFlim
   · intro s hstrip hreal
     exact phase_lock_rigidity s hstrip hreal
 
@@ -3064,7 +3926,8 @@ theorem final_RH_two_axiom_frontier_of_window_limit_frontier
   rcases hW with ⟨hzero, hreal⟩
   refine ⟨hzero, ?_⟩
   intro s hstrip hlim
-  exact xi_real_only_on_critical_line s hstrip (hreal s hstrip hlim)
+  exact xi_real_only_on_critical_line s hstrip
+    (hreal s hstrip (window_zero_limit_to_F_lattice s hlim))
 
 /-- Window-limit closure routed through `WindowLimitFrontier`. -/
 theorem conditional_RH_via_window_limit_frontier
@@ -3072,6 +3935,15 @@ theorem conditional_RH_via_window_limit_frontier
     ∀ s : ℂ, riemannZeta s = 0 → (0 < s.re ∧ s.re < 1) → s.re = 1 / 2 := by
   exact conditional_RH_via_two_axiom_frontier
     (final_RH_two_axiom_frontier_of_window_limit_frontier hW)
+
+/-- RH closure routed through the unified torus-compatibility frontier.
+
+This projects to the window-limit component for endpoint closure, while keeping
+the strong-defect component available as quantitative compatibility control. -/
+theorem conditional_RH_via_torus_compatibility_frontier
+    (hT : TorusCompatibilityFrontier) :
+    ∀ s : ℂ, riemannZeta s = 0 → (0 < s.re ∧ s.re < 1) → s.re = 1 / 2 := by
+  exact conditional_RH_via_window_limit_frontier hT.2
 
 /-- Alternative RH endpoint via the strong-defect frontier.
 
@@ -3093,7 +3965,7 @@ theorem conditional_RH_from_strong_defect_frontier
 /-- Window-limit RH closure (conditional on the stated boundary axioms). -/
 theorem conditional_RH_via_window_limits :
     ∀ s : ℂ, riemannZeta s = 0 → (0 < s.re ∧ s.re < 1) → s.re = 1/2 := by
-  exact conditional_RH_via_window_limit_frontier window_limit_frontier_holds
+  exact conditional_RH_via_torus_compatibility_frontier torusCompatibilityFrontier_holds
 
 /-- Window-limit RH closure from the compressed two-item frontier interface. -/
 theorem conditional_RH_via_two_axiom_frontier
@@ -3115,7 +3987,7 @@ theorem conditional_RH_via_window_limits_from_final_boundary_bundle
   have hfrontier : final_RH_two_axiom_frontier := by
     refine ⟨hzero, ?_⟩
     intro s hstrip hlim
-    exact hrigid s hstrip (hreal s hstrip hlim)
+    exact hrigid s hstrip (hreal s hstrip (window_zero_limit_to_F_lattice s hlim))
   exact conditional_RH_via_two_axiom_frontier hfrontier
 
 /-! ### Geometric-to-analytic tie-in (non-invasive)
@@ -3254,18 +4126,38 @@ dependency chain in one place.
 
 Primary closure chain:
 1. `conditional_RH_via_window_limits`
+1a. `conditional_RH_via_torus_compatibility_frontier`
 1b. `conditional_RH_via_two_axiom_frontier`
 1c. `conditional_RH_via_window_limit_frontier`
 1d. `conditional_RH_from_strong_defect_frontier`
+1e. `conditional_RH_via_F_lattice_boundary`
+1f. `conditional_RH_via_F_lattice`
+1g. `conditional_RH_via_window_zero_limit_boundary`
+1h. `conditional_RH_via_window_zero_limit`
 2. `conditional_RH_via_window_limits_with_bridge`
+2a. `conditional_RH_via_F_lattice_boundary_with_bridge`
 3. `rh_endpoint_master`
+3a. `rh_endpoint_master_from_F_lattice_boundary`
+3b. `rh_endpoint_master_via_F_lattice`
+3c. `rh_endpoint_master_from_window_zero_limit_boundary`
+3d. `rh_endpoint_master_via_window_zero_limit`
 
 Machine-auditable frontier interfaces:
-1. `StrongDefectFrontier`
-2. `strong_defect_frontier_holds`
-3. `WindowLimitFrontier`
-4. `window_limit_frontier_holds`
-5. `final_RH_two_axiom_frontier_of_window_limit_frontier`
+1. `TorusCompatibilityFrontier`
+2. `torusCompatibilityFrontier_holds`
+3. `StrongDefectFrontier`
+4. `strong_defect_frontier_holds`
+5. `WindowLimitFrontier`
+6. `window_limit_frontier_holds`
+7. `final_RH_two_axiom_frontier_of_window_limit_frontier`
+8. `F_lattice_zero_limit_boundary`
+9. `F_lattice_zero_limit_boundary_of_zeta_zero_is_limit_of_window_zeros`
+10. `F_lattice_zero_limit_boundary_holds`
+11. `window_zero_limit_boundary`
+12. `window_zero_limit_boundary_holds`
+13. `window_limit_frontier_of_window_zero_limit_boundary`
+14. `window_limit_frontier_of_F_lattice_boundary`
+15. `zeta_zero_is_limit_of_window_zeros_of_F_lattice_boundary`
 
 Bridge chain used by the endpoint:
 1. `euler_window_master_channel_theorem`
@@ -3277,6 +4169,7 @@ Geometric/analytic lock chain:
 2. `analytic_phase_lock_holds`
 3. `geometric_analytic_bridge`
 4. consumed by `conditional_RH_via_window_limits_with_bridge`
+5. consumed by `conditional_RH_via_F_lattice_boundary_with_bridge`
 -/
 
 /-- Threaded closure theorem:
@@ -3286,7 +4179,29 @@ theorem conditional_RH_via_window_limits_with_bridge :
       s.re = 1/2 ∧ geometric_phase_lock ∧ analytic_phase_lock s.im := by
   intro s hz hstrip
   have hcrit : s.re = 1/2 :=
-    conditional_RH_via_window_limit_frontier window_limit_frontier_holds s hz hstrip
+    conditional_RH_via_torus_compatibility_frontier torusCompatibilityFrontier_holds s hz hstrip
+  have hbridge := geometric_analytic_bridge s.im
+  exact ⟨hcrit, hbridge.1, hbridge.2.1⟩
+
+/-- Geometry+analytics endpoint routed directly from the `F(s,t)` lattice boundary. -/
+theorem conditional_RH_via_F_lattice_boundary_with_bridge
+    (hF : F_lattice_zero_limit_boundary) :
+    ∀ s : ℂ, riemannZeta s = 0 → (0 < s.re ∧ s.re < 1) →
+      s.re = 1/2 ∧ geometric_phase_lock ∧ analytic_phase_lock s.im := by
+  intro s hz hstrip
+  have hcrit : s.re = 1/2 :=
+    conditional_RH_via_F_lattice_boundary hF s hz hstrip
+  have hbridge := geometric_analytic_bridge s.im
+  exact ⟨hcrit, hbridge.1, hbridge.2.1⟩
+
+/-- Geometry+analytics endpoint routed through the dimension-lift roadmap frontier. -/
+theorem conditional_RH_via_dimensionLiftRoadmap_with_bridge
+    (hDL : DimensionLiftRoadmapFrontier) :
+    ∀ s : ℂ, riemannZeta s = 0 → (0 < s.re ∧ s.re < 1) →
+      s.re = 1/2 ∧ geometric_phase_lock ∧ analytic_phase_lock s.im := by
+  intro s hz hstrip
+  have hcrit : s.re = 1/2 :=
+    conditional_RH_via_dimensionLiftRoadmap hDL s hz hstrip
   have hbridge := geometric_analytic_bridge s.im
   exact ⟨hcrit, hbridge.1, hbridge.2.1⟩
 
@@ -3339,6 +4254,53 @@ theorem rh_endpoint_master_from_window_limit_frontier
       coherenceC (1 : ℝ) = 1 / Real.cosh (Real.log (1 : ℝ)) :=
         endpoint_channel_bridge_coherence s.im
   exact ⟨hcrit, hbridge.1, hbridge.2.1, hbridge.2.2⟩
+
+/-- Master endpoint routed directly from the `F(s,t)` lattice boundary. -/
+theorem rh_endpoint_master_from_F_lattice_boundary
+    (hF : F_lattice_zero_limit_boundary) :
+    ∀ s : ℂ, riemannZeta s = 0 → (0 < s.re ∧ s.re < 1) →
+      s.re = 1/2
+        ∧ geometric_phase_lock
+        ∧ analytic_phase_lock s.im
+        ∧ xi ((1 / 2 : ℂ) + s.im * Complex.I) ∈ ℝ := by
+  intro s hz hstrip
+  have hcrit : s.re = 1 / 2 :=
+    conditional_RH_via_F_lattice_boundary hF s hz hstrip
+  have hbridge := geometric_analytic_bridge s.im
+  have _ :
+      coherenceC (1 : ℝ) = 1 / Real.cosh (Real.log (1 : ℝ)) :=
+        endpoint_channel_bridge_coherence s.im
+  exact ⟨hcrit, hbridge.1, hbridge.2.1, hbridge.2.2⟩
+
+/-- Master endpoint via the instantiated `F(s,t)` lattice boundary. -/
+theorem rh_endpoint_master_via_F_lattice :
+    ∀ s : ℂ, riemannZeta s = 0 → (0 < s.re ∧ s.re < 1) →
+      s.re = 1/2
+        ∧ geometric_phase_lock
+        ∧ analytic_phase_lock s.im
+        ∧ xi ((1 / 2 : ℂ) + s.im * Complex.I) ∈ ℝ := by
+  exact rh_endpoint_master_from_F_lattice_boundary F_lattice_zero_limit_boundary_holds
+
+/-- Master endpoint routed directly from the standard window-zero boundary. -/
+theorem rh_endpoint_master_from_window_zero_limit_boundary
+    (hW0 : window_zero_limit_boundary) :
+    ∀ s : ℂ, riemannZeta s = 0 → (0 < s.re ∧ s.re < 1) →
+      s.re = 1/2
+        ∧ geometric_phase_lock
+        ∧ analytic_phase_lock s.im
+        ∧ xi ((1 / 2 : ℂ) + s.im * Complex.I) ∈ ℝ := by
+  exact rh_endpoint_master_from_window_limit_frontier
+    (window_limit_frontier_of_window_zero_limit_boundary hW0)
+
+/-- Master endpoint via the instantiated standard window-zero boundary. -/
+theorem rh_endpoint_master_via_window_zero_limit :
+    ∀ s : ℂ, riemannZeta s = 0 → (0 < s.re ∧ s.re < 1) →
+      s.re = 1/2
+        ∧ geometric_phase_lock
+        ∧ analytic_phase_lock s.im
+        ∧ xi ((1 / 2 : ℂ) + s.im * Complex.I) ∈ ℝ := by
+  exact rh_endpoint_master_from_window_zero_limit_boundary
+    window_zero_limit_boundary_holds
 
 /-- Master endpoint routed through the machine-auditable strong-defect interface. -/
 theorem rh_endpoint_master_from_strong_defect_frontier
@@ -3546,6 +4508,15 @@ lemma unit_circle_re_eq_im_iff_eq_sourcePhase_pi_div_four_or_five_pi_div_four
     · exact unit_circle_re_eq_im_locus_of_eq_sourcePhase_pi_div_four x y hpi
     · exact unit_circle_re_eq_im_locus_of_eq_sourcePhase_five_pi_div_four x y hfive
 
+/-- Exact crossing-locus characterization restated in `Z/8Z` phase indexing (`1` and `5`). -/
+lemma unit_circle_re_eq_im_iff_eq_phase8Rotate_one_or_five
+    (x y : ℝ) :
+    (x ^ 2 + y ^ 2 = 1 ∧ x = y)
+      ↔ (((x : ℂ) + y * Complex.I) = phase8Rotate (1 : Phase8)
+        ∨ ((x : ℂ) + y * Complex.I) = phase8Rotate (5 : Phase8)) := by
+  simpa [phase8Rotate_one, phase8Rotate_five] using
+    (unit_circle_re_eq_im_iff_eq_sourcePhase_pi_div_four_or_five_pi_div_four x y)
+
 /-- The normalized canonical source direction is exactly the `π/4` source phase. -/
 lemma canonical_B_direction_eq_sourcePhase_pi_div_four :
     (((B_canonical.re / Real.sqrt 2 : ℝ) : ℂ) + (B_canonical.im / Real.sqrt 2) * Complex.I)
@@ -3695,13 +4666,24 @@ end FourAxioms
 
     Window-limit packaging frontier (used by `conditional_RH_via_window_limits` and
     `rh_endpoint_master`):
-    • `zeta_zero_is_limit_of_window_zeros`
+    • `F_lattice_zero_limit_boundary_assumption`
     • `phase_lock_from_window_limit`
+    Derived interface:
+    • `zeta_zero_is_limit_of_window_zeros`
     Interface names:
     • `WindowLimitFrontier`
     • `window_limit_frontier_holds`
     • `final_RH_two_axiom_frontier_of_window_limit_frontier`
     • `conditional_RH_via_window_limit_frontier`
+
+    Unified torus-compatibility frontier (canonical top-level endpoint interface):
+    • `TorusCompatibilityFrontier`
+    • `torusCompatibilityFrontier_holds`
+    • `torusCompatibilityDefect`
+    • `torusPhaseLock`
+    • `torusCompatibilityDefect_tendsto_zero_of_strongDefectFrontier`
+    • `torusPhaseLock_of_window_limit_frontier`
+    • `conditional_RH_via_torus_compatibility_frontier`
 
     Supporting analytic boundaries (outside the minimal endpoint frontier):
     • `xi_logderiv_formula`
@@ -3721,12 +4703,15 @@ end FourAxioms
 
     **Primary RH Closure Route (`conditional_RH`)**
     ─────────────────────────────────────────────
-    The main theorem uses the WINDOW-LIMIT FRONTIER:
+    The main theorem uses the TORUS-COMPATIBILITY FRONTIER
+    (whose window-limit projection closes RH):
 
       Main entry:     `conditional_RH : ∀ s, ζ(s) = 0 ∧ 0 < Re(s) < 1 ⇒ Re(s) = 1/2`
       Routing:        `conditional_RH_via_window_limits`
-      Frontier:       `WindowLimitFrontier`
-      Key axioms:     zeta_zero_is_limit_of_window_zeros, phase_lock_from_window_limit
+      Top frontier:   `TorusCompatibilityFrontier`
+      RH projection:  `WindowLimitFrontier`
+      Key axioms:     F_lattice_zero_limit_boundary_assumption, phase_lock_from_window_limit
+      Derived link:   zeta_zero_is_limit_of_window_zeros (from F-lattice boundary)
       Grounding:      Directly from the analytic theory of ζ-zeros and finite-window approximations
       Narrative:      Ζ-zeros converge to limit points → phase-lock persists → automatic critical-line rigidity
 

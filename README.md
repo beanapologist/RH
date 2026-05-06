@@ -10,9 +10,18 @@ The current development does not claim an unconditional machine-checked proof of
 
 **Primary endpoint route (window-limit frontier):**
 - `conditional_RH` — Main theorem: Every nontrivial-strip zero of ζ lies on Re(s) = 1/2
-- Routes through `conditional_RH_via_window_limits` using the **window-limit frontier**
-- Grounded in analytic theory: ζ-zeros are limits of finite-window zeros, phase-lock persists at limits
-- Requires: `zeta_zero_is_limit_of_window_zeros`, `phase_lock_from_window_limit`
+- Routes through `conditional_RH_via_window_limits`, now expressed via `conditional_RH_via_torus_compatibility_frontier`
+- Uses the **torus-compatibility frontier** as the canonical top-level endpoint interface whose window-limit projection closes RH
+- Grounded in analytic theory: lattice-window zeros converge to strip limits, then phase-lock/rigidity closes on the critical line
+- Active boundary assumption: `F_lattice_zero_limit_boundary_assumption`
+- Derived interface: `zeta_zero_is_limit_of_window_zeros`
+
+**Unified torus-compatibility frontier (canonical top-level endpoint interface):**
+- `TorusCompatibilityFrontier := StrongDefectFrontier ∧ WindowLimitFrontier`
+- Shared defect object: `torusCompatibilityDefect N s = ‖xi_partial_defect2D (prime_window N) s‖`
+- Shared lock predicate: `torusPhaseLock s := Re(s) = 1/2`
+- Strong-defect projection: quantitative off-critical incompatibility via eventual positive lower bounds
+- Window-limit projection: strip limit-points of window zeros force torus phase lock
 
 **Extended endpoint:**
 - `rh_endpoint_master` — Same conclusion packaged with geometric/analytic bridge data
@@ -43,9 +52,9 @@ The canonical source factor **B = 1 + i** connects to the unit-circle crossing l
 - Unit-circle crossing locus characterization
 
 **Not Formalized (explicit boundary axioms):**
-- **Window-limit frontier:** `zeta_zero_is_limit_of_window_zeros`, `phase_lock_from_window_limit`
+- **Window-limit frontier (active lattice form):** `F_lattice_zero_limit_boundary_assumption`
 - **Strong-defect frontier:** `xi_defect_profile_nonzero_off_critical`, `xi_partial_defect2D_window_tendsto_zero`
-- **Supporting boundaries:** xi log-derivative formula, phase velocity on critical line, completed ζ / Hurwitz conditions, Cauchy tail control, phase-lock shift constant
+- **Supporting boundaries:** `xi_logderiv_formula`, `xi_logderiv_symmetry_sum`, `phase_velocity_on_critical_line`, `completedHurwitzZetaEven_zero_conj_of_ne_zero`, `completedRiemannZeta_conj`, `xi_partial_defect2D_factor_boundary`, `missingPrimeCore_cauchy_tail`, `partialEulerPhaseVelocity_window_tendsto`, `phase_lock_shift_constant_11_over_8`
 
 See end of `RH.lean` for full inventory.
 
@@ -53,30 +62,31 @@ See end of `RH.lean` for full inventory.
 
 To move from the current reduction to an unconditional theorem, the remaining work is to replace each boundary axiom with a proved theorem in Lean.
 
-Current checklist status: **2/11** boundary assumptions discharged.
+Current checklist status: all interfaces are theorem-clean (no `sorry`), but endpoint closure is still conditional on explicit `variable` assumptions in `RH.lean`.
 
 Execution status notes:
-- Item 4 discharged: `completedRiemannZeta_factor_bridge_at_exceptional_lattice` → proved via `simp [completedRiemannZeta]`.
-- Item 9 discharged: `phase_lock_from_window_limit` → proved via `phase_lock_rigidity_strong` + `xi_real_on_critical_line` chain. The geometric picture: h = e^μ, coherenceC(h) = sech(μ), sech(μ) = 1 ↔ μ = 0 ↔ Re(s) = 1/2. Window zeros force the defect to vanish, driving coherence to 1, which drives μ to 0, which forces Re(s) = 1/2, making ξ real by critical-line symmetry.
-- Item 1 researched: `xi_logderiv_formula` — classical ξ'/ξ identity; direct Mathlib drop-in not yet identified.
-- Item 5 researched: `completedHurwitzZetaEven_zero_conj_of_ne_zero` — conjugation symmetry; no direct Mathlib theorem identified yet.
+- Lattice-native closure routing is in place (`F(s,t)` boundary -> window zero limit -> phase-lock bridge -> RH endpoint).
+- `phase_lock_from_window_limit` is a theorem (no placeholder), but currently depends on strong-defect assumptions already declared in the file.
+- `zeta_zero_is_limit_of_window_zeros` is now derived from the active lattice assumption.
+- `xi_logderiv_formula` and `completedHurwitzZetaEven_zero_conj_of_ne_zero` remain high-value analytic discharge targets.
 
 Recommended order (dependency-first), now tracked as a checklist:
 
-- [ ] `xi_logderiv_formula` (researched; classical ξ'/ξ identity not yet located in Mathlib)
-- [ ] `xi_logderiv_symmetry_sum` (digamma symmetry formula)
-- [ ] `phase_velocity_on_critical_line` (chain rule: d/dt log ξ(1/2 + it) = i · core(t))
-- [x] `completedRiemannZeta_factor_bridge_at_exceptional_lattice` (nullified by factorization)
-- [ ] `completedHurwitzZetaEven_zero_conj_of_ne_zero` (researched; no analytic drop-in located)
-- [ ] `missingPrimeCore_cauchy_tail` (window control via defect bounds)
-- [ ] `partialEulerPhaseVelocity_window_tendsto` (window velocity → core velocity)
-- [ ] `zeta_zero_is_limit_of_window_zeros` (analytic denseness: ζ-zeros = limits of window zeros)
-- [x] `phase_lock_from_window_limit` (geometric incompatibility: Re(s) = 1/2 → ξ ∈ ℝ)
-- [ ] `xi_defect_profile_nonzero_off_critical` (defect stays bounded away from 0 off critical line)
-- [ ] `xi_partial_defect2D_window_tendsto_zero` (defect vanishes in the window limit)
+- [ ] `F_lattice_zero_limit_boundary_assumption` (replace with proved lattice zero-limit theorem)
+- [ ] `xi_partial_defect2D_window_tendsto_zero` (prove defect closure to zero)
+- [ ] `xi_defect_profile_nonzero_off_critical` (prove eventual off-critical lower bound)
+- [ ] `missingPrimeCore_cauchy_tail` (prove missing-prime tails are Cauchy)
+- [ ] `partialEulerPhaseVelocity_window_tendsto` (prove window velocity tends to ξ-core)
+- [ ] `xi_logderiv_formula` (classical ξ'/ξ identity)
+- [ ] `xi_logderiv_symmetry_sum` (symmetric digamma/ζ-logderivative identity)
+- [ ] `phase_velocity_on_critical_line` (chain-rule/branch theorem on critical line)
+- [ ] `completedHurwitzZetaEven_zero_conj_of_ne_zero` (completed Hurwitz-even conjugation)
+- [ ] `completedRiemannZeta_conj` (or derive globally from established conjugation lemmas)
+- [ ] `xi_partial_defect2D_factor_boundary` (replace factor-boundary placeholder with theorem)
+- [ ] `phase_lock_shift_constant_11_over_8` (optional heuristic boundary; can be isolated from RH core)
 
 **Milestone criterion:**
-- When all named frontier assumptions are replaced by theorem proofs, `conditional_RH` is no longer merely a reduction statement in this codebase.
+- Airtight status in this repository is reached when all active `variable` assumptions in `RH.lean` that feed endpoint closure are replaced by theorem proofs.
 
 ---
 
