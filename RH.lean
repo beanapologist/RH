@@ -699,13 +699,6 @@ variable (xi_logderiv_formula : ∀ s : ℂ,
       + (1 / 2 : ℂ) * digamma (s / 2)
       + deriv riemannZeta s / riemannZeta s)
 
-/-- Symmetric FE log-derivative identity at `s` and `1-s`. -/
-variable (xi_logderiv_symmetry_sum : ∀ s : ℂ,
-    (1 / 2 : ℂ) * (digamma (s / 2) + digamma ((1 - s) / 2))
-      = (Real.log Real.pi : ℂ)
-      - (deriv riemannZeta s / riemannZeta s
-        + deriv riemannZeta (1 - s) / riemannZeta (1 - s)))
-
 /-- Item-2 reduction prototype:
 the symmetric digamma/zeta sum follows from item 1 once one has
 the reflected ξ-log-derivative relation `Lξ(1-s) = -Lξ(s)`. -/
@@ -2001,7 +1994,8 @@ The remaining unformalized boundary is explicit and split into two layers.
 
 Xi/log-derivative layer:
 1. `xi_logderiv_formula`
-2. `xi_logderiv_symmetry_sum`
+2. `xi_logderiv_symmetry_sum` (prototype target; currently represented by
+  `xi_logderiv_symmetry_sum_of_xi_logderiv_formula` with explicit reflected-logderiv input)
 3. `phase_velocity_on_critical_line`
 4. `completedRiemannZeta_factor_bridge_at_exceptional_lattice` (DISCHARGED)
   this boundary is now a proved theorem (`simp` on lattice sites `s = -2n`)
@@ -4852,12 +4846,13 @@ end FourAxioms
 
     Supporting analytic boundaries (outside the minimal endpoint frontier):
     • `xi_logderiv_formula`
-    • `xi_logderiv_symmetry_sum`
     • `phase_velocity_on_critical_line`
     • `completedHurwitzZetaEven_zero_conj_of_ne_zero`
     • `missingPrimeCore_cauchy_tail`
     • `partialEulerPhaseVelocity_window_tendsto`
     • `xi_gap_factor_nonzero_off_critical`  -- compatibility theorem (derived from frontier assumptions)
+    Prototype target (currently not an active global assumption):
+    • `xi_logderiv_symmetry_sum`
     Optional compatibility marker (not an active boundary assumption):
     • `phase_lock_shift_constant_11_over_8`
     Localized compatibility input (not active globally):
