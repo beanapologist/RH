@@ -461,6 +461,76 @@ theorem coherence_at_medium_modulus_eq_source :
 theorem coherence_peak : coherence 1 = 1/2 := by
   unfold coherence; norm_num
 
+/-- Coherence is strictly below one on the positive radius channel. -/
+theorem coherence_lt_one (r : ℝ) (hr : 0 < r) :
+    coherence r < 1 := by
+  unfold coherence
+  have hden : 0 < (1 + r) ^ 2 := by positivity
+  have hnum : 2 * r < (1 + r) ^ 2 := by
+    nlinarith [sq_nonneg r]
+  exact (div_lt_one hden).2 hnum
+
+/-- RH defect channel in radius coordinates: `1 - C(r)`. -/
+noncomputable def RH_defect (r : ℝ) : ℝ :=
+  1 - coherence r
+
+/-- The RH defect profile is exactly the coherence residual `1 - C(r)`.
+Here `C(r)` is `coherence r`. -/
+theorem RH_defect_eq_coherence_residual (r : ℝ) :
+    RH_defect r = 1 - coherence r := by
+  rfl
+
+/-- Positivity of the defect is equivalent to strict sub-unity coherence. -/
+theorem RH_defect_pos_iff_coherence_lt_one (r : ℝ) :
+    0 < RH_defect r ↔ coherence r < 1 := by
+  simpa [RH_defect] using (sub_pos : 0 < 1 - coherence r ↔ coherence r < 1)
+
+/-- Off-equilibrium in the normalized channel is exactly `C(h) < 1`.
+This packages: off-critical (radius form) ↔ off-equilibrium ↔ `C < 1`. -/
+theorem off_equilibrium_iff_coherenceC_lt_one (h : ℝ) (hh : 0 < h) :
+    h ≠ 1 ↔ coherenceC h < 1 := by
+  constructor
+  · intro hne
+    rw [coherenceC_eq_sech_log_h h hh]
+    have hlog_ne : Real.log h ≠ 0 := by
+      intro hlog
+      apply hne
+      have hexp : Real.exp (Real.log h) = Real.exp 0 := by simpa [hlog]
+      simpa [Real.exp_log hh, Real.exp_zero] using hexp
+    have hcosh_gt : 1 < Real.cosh (Real.log h) := Real.one_lt_cosh hlog_ne
+    exact one_div_lt_one hcosh_gt
+  · intro hlt
+    intro heq
+    have h1 : coherenceC 1 = 1 := by
+      rw [coherenceC_eq_sech_log_h 1 zero_lt_one]
+      simp
+    have : coherenceC 1 < 1 := by simpa [heq] using hlt
+    have : (1 : ℝ) < 1 := by simpa [h1] using this
+    exact (lt_irrefl (1 : ℝ)) this
+
+/-- Normalized defect residual in the `h`-channel: `1 - C(h)`. -/
+noncomputable def RH_defectC (h : ℝ) : ℝ :=
+  1 - coherenceC h
+
+/-- Unified equivalence bundle in the normalized channel:
+off-equilibrium, sub-unity coherence, and positive defect residual are equivalent. -/
+theorem RH_defect_off_equilibrium_bundle (h : ℝ) (hh : 0 < h) :
+    (0 < RH_defectC h) ↔ (h ≠ 1) ↔ (coherenceC h < 1) := by
+  have hdef : 0 < RH_defectC h ↔ coherenceC h < 1 := by
+    simpa [RH_defectC] using (sub_pos : 0 < 1 - coherenceC h ↔ coherenceC h < 1)
+  constructor
+  · intro hpos
+    exact (off_equilibrium_iff_coherenceC_lt_one h hh).2 (hdef.mp hpos)
+  · intro hoff
+    exact hdef.mpr ((off_equilibrium_iff_coherenceC_lt_one h hh).1 hoff)
+
+/-- Off-critical positivity: if `r ≠ 1`, then the defect `1 - C(r)` is strictly positive.
+The proof route is `coherence_lt_one` on `r > 0`. -/
+theorem RH_defect_pos_of_off_critical (r : ℝ) (hr : 0 < r) (_hoff : r ≠ 1) :
+    0 < RH_defect r := by
+  unfold RH_defect
+  exact sub_pos.mpr (coherence_lt_one r hr)
+
 /-! ## §7.  σ = log₂|B| = 1/2
 
 Direct calculation: log₂(√2) = 1/2. -/
@@ -2058,10 +2128,12 @@ Window-limit closure layer:
   `step1_tail_control_of_missingPrimeCore_cauchy_tail`)
 2. `partialEulerPhaseVelocity_window_tendsto` (consumed by
   `step1_velocity_transfer_of_partialEulerPhaseVelocity_window_tendsto`)
-3. `Step1ApproximationFrontier_assumption`
-4. `zeta_zero_is_limit_of_window_zeros` (derived from item 3)
-5. `phase_lock_from_F_lattice_limit` (via lattice->window conversion)
-6. `phase_lock_from_window_limit`
+3. `Step1ReducedFrontier_assumption`
+4. `zeta_zero_is_limit_of_window_zeros` (derived from item 3 via
+  `step1_approximation_frontier_of_reduced`)
+5. `PhaseLockLatticeBridge` / `phase_lock_lattice_bridge_holds`
+6. `phase_lock_from_F_lattice_limit`
+7. `phase_lock_from_window_limit` (legacy wrapper derived from item 5)
 
 Endpoint dependency sketch:
 `rh_endpoint_master`
@@ -2071,7 +2143,7 @@ Endpoint dependency sketch:
   <- `conditional_RH_via_two_axiom_frontier`
   <- `phase_lock_passes_to_limit` (legacy naming)
   <- `phase_lock_passes_to_limit_2D` (Lorentzian 2-D naming bridge)
-  <- `phase_lock_from_window_limit` and `phase_lock_rigidity`.
+  <- lattice-native phase-lock transfer and `phase_lock_rigidity`.
 
 Minimal strong-defect frontier (alternative route):
 1. `xi_defect_profile_nonzero_off_critical`
@@ -2080,7 +2152,7 @@ Minimal strong-defect frontier (alternative route):
 Window-limit packaging frontier (primary route for `conditional_RH_via_window_limits` / `rh_endpoint_master`):
 1. (not used in strong-defect route)
 2. `xi_partial_defect2D_window_tendsto_zero`
-3. `Step1ApproximationFrontier_assumption`
+3. `Step1ReducedFrontier_assumption`
 4. `phase_lock_from_F_lattice_limit`
 
 Unified torus-compatibility frontier (canonical top-level interface):
@@ -3490,6 +3562,14 @@ def Step1ApproximationFrontier : Prop :=
   (∀ N : ℕ, ∀ s : ℂ,
     F_lattice N s.re s.im = partialEulerWindowFunction N s)
 
+/-- Reduced Step-1 frontier: the four independent clauses.
+The local approximation / zero-stability / lattice-channel clauses are derivable. -/
+def Step1ReducedFrontier : Prop :=
+  F_lattice_zero_limit_boundary
+  ∧ Step1TailControlSchema
+  ∧ Step1VelocityTransferSchema
+  ∧ Step1PhaseVelocityIdentitySchema
+
 /-- The lattice zero-limit boundary implies local epsilon-approximation at zeta zeros. -/
 theorem step1_local_approximation_of_F_lattice_boundary
     (hF : F_lattice_zero_limit_boundary) :
@@ -3586,6 +3666,35 @@ theorem step1_approximation_frontier_of_F_lattice_boundary
     step1_phase_velocity_identity_of_assumption hPhase,
     step1_lattice_channel_identity⟩
 
+/-- Build full Step-1 frontier from the reduced independent clauses. -/
+theorem step1_approximation_frontier_of_reduced
+    (hR : Step1ReducedFrontier) :
+    Step1ApproximationFrontier := by
+  rcases hR with ⟨hF, hTail, hVel, hPhase⟩
+  exact ⟨hF,
+    step1_local_approximation_of_F_lattice_boundary hF,
+    step1_zero_stability_transfer_of_F_lattice_boundary hF,
+    hTail,
+    hVel,
+    hPhase,
+    step1_lattice_channel_identity⟩
+
+/-- Project the reduced independent clauses from the full Step-1 frontier. -/
+theorem step1_reduced_of_approximation_frontier
+    (hA : Step1ApproximationFrontier) :
+    Step1ReducedFrontier := by
+  rcases hA with ⟨hF, _hLocal, _hZero, hTail, hVel, hPhase, _hChan⟩
+  exact ⟨hF, hTail, hVel, hPhase⟩
+
+/-- Exact reduction of Step 1 to four independent frontier clauses. -/
+theorem Step1ApproximationFrontier_iff_reduced :
+    Step1ApproximationFrontier ↔ Step1ReducedFrontier := by
+  constructor
+  · intro hA
+    exact step1_reduced_of_approximation_frontier hA
+  · intro hR
+    exact step1_approximation_frontier_of_reduced hR
+
 /-- The Step-1 approximation frontier implies the Step-1 endpoint target. -/
 theorem step1_target_of_approximation_frontier
     (hA : Step1ApproximationFrontier) :
@@ -3604,8 +3713,8 @@ theorem step1_phase_velocity_identity_of_approximation_frontier
   rcases hA with ⟨_hF, _hLocal, _hZero, _hTail, _hVel, hPhase, _hChan⟩
   exact hPhase
 
-/-- Active Step-1 approximation-frontier assumption for the endpoint route. -/
-variable (Step1ApproximationFrontier_assumption : Step1ApproximationFrontier)
+/-- Active reduced Step-1 assumption for the endpoint route. -/
+variable (Step1ReducedFrontier_assumption : Step1ReducedFrontier)
 
 /-- Hurwitz-style boundary, now derived from the active Step-1 assumption. -/
 theorem zeta_zero_is_limit_of_window_zeros
@@ -3613,8 +3722,10 @@ theorem zeta_zero_is_limit_of_window_zeros
     ∃ sN : ℕ → ℂ,
       (∀ N : ℕ, partialEulerWindowFunction N (sN N) = 0) ∧
       Filter.Tendsto sN Filter.atTop (nhds s) := by
+  have hA : Step1ApproximationFrontier :=
+    step1_approximation_frontier_of_reduced Step1ReducedFrontier_assumption
   exact step1_target_of_approximation_frontier
-    Step1ApproximationFrontier_assumption s hz
+    hA s hz
 
 /-- Boundary equivalence: complex window-zero limits and `F(s,t)` lattice limits are equivalent. -/
 theorem F_lattice_zero_limit_boundary_iff_window_zero_limit_boundary :
@@ -3657,8 +3768,10 @@ theorem lattice_boundary_discharged_of_step1_approximation_frontier
 /-- The current assumptions instantiate the `F(s,t)` lattice zero-limit boundary. -/
 theorem F_lattice_zero_limit_boundary_holds :
     F_lattice_zero_limit_boundary := by
+  have hA : Step1ApproximationFrontier :=
+    step1_approximation_frontier_of_reduced Step1ReducedFrontier_assumption
   exact lattice_boundary_discharged_of_step1_approximation_frontier
-    Step1ApproximationFrontier_assumption
+    hA
 
 /-- Bridge boundary: if `s` is a limit of window zeros in the strip,
 then ξ is real at `s` (phase-lock survives the limit).
@@ -3684,6 +3797,47 @@ theorem phase_lock_from_window_limit (s : ℂ)
   -- Step 3: xi is real at every critical-line point
   rw [hs_form]
   exact xi_real_on_critical_line s.im
+
+/-- Lattice-native phase-lock transfer interface.
+This is the theorem-level bridge in the `σ + i t` channel for `F(s,t)`. -/
+def PhaseLockLatticeBridge : Prop :=
+  ∀ s : ℂ,
+    0 < s.re ∧ s.re < 1 →
+    (∃ σN tN : ℕ → ℝ,
+      (∀ N : ℕ, F_lattice N (σN N) (tN N) = 0) ∧
+      Filter.Tendsto (fun N : ℕ => latticePoint (σN N) (tN N)) Filter.atTop (nhds s)) →
+    xi s ∈ ℝ
+
+/-- The existing strip-limit theorem already supplies the lattice-native bridge. -/
+theorem phase_lock_lattice_bridge_holds : PhaseLockLatticeBridge := by
+  intro s hstrip hFlim
+  exact phase_lock_from_F_lattice_limit s hstrip hFlim
+
+/-- A lattice-native bridge immediately yields the legacy complex-sequence bridge. -/
+theorem phase_lock_from_window_limit_of_lattice_bridge
+    (hBridge : PhaseLockLatticeBridge)
+    (s : ℂ)
+    (hstrip : 0 < s.re ∧ s.re < 1)
+    (hlim : ∃ sN : ℕ → ℂ,
+      (∀ N : ℕ, sN N ∈ zeros_of_partial N) ∧
+      Filter.Tendsto sN Filter.atTop (nhds s)) :
+    xi s ∈ ℝ := by
+  exact hBridge s hstrip (window_zero_limit_to_F_lattice s hlim)
+
+/-- The lattice-native and legacy phase-lock transfer formulations are equivalent. -/
+theorem PhaseLockLatticeBridge_iff_window_limit_bridge :
+    PhaseLockLatticeBridge ↔
+      (∀ s : ℂ,
+        0 < s.re ∧ s.re < 1 →
+        (∃ sN : ℕ → ℂ,
+          (∀ N : ℕ, sN N ∈ zeros_of_partial N) ∧
+          Filter.Tendsto sN Filter.atTop (nhds s)) →
+        xi s ∈ ℝ) := by
+  constructor
+  · intro hBridge s hstrip hlim
+    exact phase_lock_from_window_limit_of_lattice_bridge hBridge s hstrip hlim
+  · intro hBridge s hstrip hFlim
+    exact hBridge s hstrip (window_zero_limit_from_F_lattice s hFlim)
 
 /-- Lattice-channel bridge for phase-lock transfer:
 if `s` is reached by lattice-window zeros in the strip, then ξ is real at `s`. -/
@@ -3766,7 +3920,7 @@ theorem WindowLimitFrontier_iff_legacy :
 theorem window_limit_frontier_holds : WindowLimitFrontier := by
   refine ⟨zeta_zero_is_limit_of_window_zeros, ?_⟩
   intro s hstrip hFlim
-  exact phase_lock_from_F_lattice_limit s hstrip hFlim
+  exact phase_lock_lattice_bridge_holds s hstrip hFlim
 
 /-- The `F(s,t)` lattice zero-limit boundary instantiates `WindowLimitFrontier`. -/
 theorem window_limit_frontier_of_F_lattice_boundary
@@ -4233,9 +4387,11 @@ lemma geometric_phase_lock_holds : geometric_phase_lock := by
 
 /-- The analytic phase lock follows from the ξ phase-velocity decomposition. -/
 lemma analytic_phase_lock_holds (t : ℝ) : analytic_phase_lock t := by
+  have hA : Step1ApproximationFrontier :=
+    step1_approximation_frontier_of_reduced Step1ReducedFrontier_assumption
   have hPhase : Step1PhaseVelocityIdentitySchema :=
     step1_phase_velocity_identity_of_approximation_frontier
-      Step1ApproximationFrontier_assumption
+      hA
   exact ⟨phase_velocity_real_split hPhase t, phase_velocity_imag_split hPhase t⟩
 
 /-- Combined bridge theorem:
@@ -4888,8 +5044,12 @@ end FourAxioms
 
     Window-limit packaging frontier (used by `conditional_RH_via_window_limits` and
     `rh_endpoint_master`):
-    • `Step1ApproximationFrontier_assumption`
-    • `phase_lock_from_window_limit`
+    • `Step1ReducedFrontier_assumption`
+    Proven bridge:
+    • `PhaseLockLatticeBridge`
+    • `phase_lock_lattice_bridge_holds`
+    • `phase_lock_from_F_lattice_limit`
+    • `phase_lock_from_window_limit` (legacy wrapper)
     Derived interface:
     • `zeta_zero_is_limit_of_window_zeros`
     Interface names:
@@ -4939,7 +5099,8 @@ end FourAxioms
       Routing:        `conditional_RH_via_window_limits`
       Top frontier:   `TorusCompatibilityFrontier`
       RH projection:  `WindowLimitFrontier`
-      Key axioms:     Step1ApproximationFrontier_assumption, phase_lock_from_window_limit
+      Key axiom:      Step1ReducedFrontier_assumption
+      Key bridge:     `PhaseLockLatticeBridge` / `phase_lock_lattice_bridge_holds`
       Derived link:   zeta_zero_is_limit_of_window_zeros (from F-lattice boundary)
       Grounding:      Directly from the analytic theory of ζ-zeros and finite-window approximations
       Narrative:      Ζ-zeros converge to limit points → phase-lock persists → automatic critical-line rigidity
