@@ -2027,8 +2027,10 @@ Reduced boundary core (prototype reductions now formalized):
   (used to isolate circularity and minimize independent boundary inputs)
 
 Window-limit closure layer:
-1. `missingPrimeCore_cauchy_tail`
-2. `partialEulerPhaseVelocity_window_tendsto`
+1. `missingPrimeCore_cauchy_tail` (consumed by
+  `step1_tail_control_of_missingPrimeCore_cauchy_tail`)
+2. `partialEulerPhaseVelocity_window_tendsto` (consumed by
+  `step1_velocity_transfer_of_partialEulerPhaseVelocity_window_tendsto`)
 3. `Step1ApproximationFrontier_assumption`
 4. `zeta_zero_is_limit_of_window_zeros` (derived from item 3)
 5. `phase_lock_from_F_lattice_limit` (via lattice->window conversion)
@@ -3242,19 +3244,6 @@ These declarations state the analytic closure needed to pass from finite windows
 to the full ξ-core phase-velocity relation and zero-set limits.
 -/
 
-/-- Assumed Cauchy-tail control for missing-prime windows. -/
-variable (missingPrimeCore_cauchy_tail :
-    (t θ : ℝ) :
-    ∀ ε > 0, ∃ N0 : ℕ, ∀ N₁ N₂ : ℕ,
-      N0 ≤ N₁ → N₁ ≤ N₂ →
-  ‖missingPrimeCore N₁ N₂ t θ‖ < ε)
-
-/-- Assumed convergence of the windowed phase velocity to the ξ-core velocity. -/
-variable (partialEulerPhaseVelocity_window_tendsto :
-    (t θ : ℝ) :
-    Filter.Tendsto (fun N : ℕ => partialEulerPhaseVelocity_window N t θ) Filter.atTop
-  (nhds (xi_logderiv_core_on_line t)))
-
 /-- Window model used for zero approximation at level `N`. -/
 noncomputable def partialEulerWindowFunction (N : ℕ) (s : ℂ) : ℂ :=
   partialEulerPhaseCore_window N s.im 0
@@ -3920,20 +3909,35 @@ def DimensionLiftAnalyticObligations : Prop :=
         (∀ N : ℕ, partialEulerWindowFunction N (sN N) = 0)
           ∧ Filter.Tendsto sN Filter.atTop (nhds s))
 
-/-- The current assumptions instantiate the analytic lift-obligation bundle. -/
-theorem dimensionLiftAnalyticObligations_holds : DimensionLiftAnalyticObligations := by
+/-- The stated assumptions instantiate the analytic lift-obligation bundle. -/
+theorem dimensionLiftAnalyticObligations_holds
+    (hTail : (t θ : ℝ) :
+      ∀ ε > 0, ∃ N0 : ℕ, ∀ N₁ N₂ : ℕ,
+        N0 ≤ N₁ → N₁ ≤ N₂ → ‖missingPrimeCore N₁ N₂ t θ‖ < ε)
+    (hVel : (t θ : ℝ) :
+      Filter.Tendsto (fun N : ℕ => partialEulerPhaseVelocity_window N t θ) Filter.atTop
+        (nhds (xi_logderiv_core_on_line t))) :
+    DimensionLiftAnalyticObligations := by
   exact ⟨xi_partial_defect2D_window_tendsto_zero,
-    missingPrimeCore_cauchy_tail,
-    partialEulerPhaseVelocity_window_tendsto,
+    hTail,
+    hVel,
     zeta_zero_is_limit_of_window_zeros⟩
 
 /-- Combined roadmap target: geometric ladder + analytic lift obligations. -/
 def DimensionLiftRoadmapFrontier : Prop :=
   DimensionLiftFrontier ∧ DimensionLiftAnalyticObligations
 
-/-- The current file instantiates the combined dimension-lift roadmap frontier. -/
-theorem dimensionLiftRoadmapFrontier_holds : DimensionLiftRoadmapFrontier := by
-  exact ⟨dimensionLiftFrontier_holds, dimensionLiftAnalyticObligations_holds⟩
+/-- The current file instantiates the combined dimension-lift roadmap frontier
+from the stated tail/velocity assumptions. -/
+theorem dimensionLiftRoadmapFrontier_holds
+    (hTail : (t θ : ℝ) :
+      ∀ ε > 0, ∃ N0 : ℕ, ∀ N₁ N₂ : ℕ,
+        N0 ≤ N₁ → N₁ ≤ N₂ → ‖missingPrimeCore N₁ N₂ t θ‖ < ε)
+    (hVel : (t θ : ℝ) :
+      Filter.Tendsto (fun N : ℕ => partialEulerPhaseVelocity_window N t θ) Filter.atTop
+        (nhds (xi_logderiv_core_on_line t))) :
+    DimensionLiftRoadmapFrontier := by
+  exact ⟨dimensionLiftFrontier_holds, dimensionLiftAnalyticObligations_holds hTail hVel⟩
 
 /-- Projection: the shape-first frontier already contains torus compatibility. -/
 lemma torusCompatibilityFrontier_of_dimensionLiftFrontier
@@ -4848,11 +4852,13 @@ end FourAxioms
     • `xi_logderiv_formula`
     • `phase_velocity_on_critical_line`
     • `completedHurwitzZetaEven_zero_conj_of_ne_zero`
-    • `missingPrimeCore_cauchy_tail`
-    • `partialEulerPhaseVelocity_window_tendsto`
     • `xi_gap_factor_nonzero_off_critical`  -- compatibility theorem (derived from frontier assumptions)
     Prototype target (currently not an active global assumption):
     • `xi_logderiv_symmetry_sum`
+    Step-1 consumed analytic bridges (not active global assumptions):
+    • `missingPrimeCore_cauchy_tail` -> `step1_tail_control_of_missingPrimeCore_cauchy_tail`
+    • `partialEulerPhaseVelocity_window_tendsto` ->
+      `step1_velocity_transfer_of_partialEulerPhaseVelocity_window_tendsto`
     Optional compatibility marker (not an active boundary assumption):
     • `phase_lock_shift_constant_11_over_8`
     Localized compatibility input (not active globally):
