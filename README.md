@@ -56,7 +56,8 @@ The canonical source factor **B = 1 + i** connects to the unit-circle crossing l
 - **Window-limit frontier (active Step-1 form):** `Step1ApproximationFrontier_assumption`
 - **Strong-defect frontier (active bundled form):** `strongDefectBoundaryInput_assumption`
 - **Projected interfaces:** `xi_defect_profile_nonzero_off_critical`, `xi_partial_defect2D_window_tendsto_zero`
-- **Supporting boundaries:** `completedHurwitzZetaEven_zero_conj_of_ne_zero`
+- **Supporting boundaries:** `conjugationBoundaryInput_assumption`
+- **Projected interface:** `completedHurwitzZetaEven_zero_conj_of_ne_zero`
 - **Prototype target (currently not active global assumption):** `xi_logderiv_formula` (threaded as explicit input to reduction prototypes)
 - **Step-1 consumed analytic bridges (not active global assumptions):** `missingPrimeCore_cauchy_tail` -> `step1_tail_control_of_missingPrimeCore_cauchy_tail`, `partialEulerPhaseVelocity_window_tendsto` -> `step1_velocity_transfer_of_partialEulerPhaseVelocity_window_tendsto`, `phase_velocity_on_critical_line` -> `step1_phase_velocity_identity_of_assumption`
 - **Prototype target (currently not active global assumption):** `xi_logderiv_symmetry_sum` (via `xi_logderiv_symmetry_sum_of_xi_logderiv_formula`)
@@ -78,7 +79,7 @@ Execution status notes:
 - Step-1 landing interface is now explicit and non-alias: `Step1ApproximationFrontier` packages lattice zero-limit boundary + local epsilon-approximation at zeta zeros + zero-stability transfer (local capture -> convergent sequence extraction) + tail-control schema for window cores + velocity-transfer schema + lattice/window channel identity.
 - New bridge: `step1_tail_control_of_missingPrimeCore_cauchy_tail` connects `missingPrimeCore_cauchy_tail` into the Step-1 frontier.
 - New bridge: `step1_velocity_transfer_of_partialEulerPhaseVelocity_window_tendsto` connects `partialEulerPhaseVelocity_window_tendsto` into the Step-1 frontier.
-- `xi_logderiv_formula` and `completedHurwitzZetaEven_zero_conj_of_ne_zero` remain high-value analytic discharge targets.
+- `xi_logderiv_formula` and `conjugationBoundaryInput_assumption` remain high-value analytic discharge targets.
 
 Recommended order (dependency-first), now tracked as a checklist:
 
@@ -91,7 +92,7 @@ Recommended order (dependency-first), now tracked as a checklist:
 - [x] `xi_logderiv_formula` (removed from active global assumptions; currently threaded as explicit prototype input)
 - [x] `xi_logderiv_symmetry_sum` (no longer active global assumption; represented by reduction prototype theorem)
 - [x] `phase_velocity_on_critical_line` (consumed into Step-1 frontier via phase-velocity identity bridge)
-- [ ] `completedHurwitzZetaEven_zero_conj_of_ne_zero` (completed Hurwitz-even conjugation)
+- [ ] `conjugationBoundaryInput_assumption` (bundled completed Hurwitz-even conjugation boundary)
 - [x] `completedRiemannZeta_conj` (derived globally from established conjugation lemmas)
 - [x] `xi_partial_defect2D_factor_boundary` (localized compatibility input; removed from active global assumptions)
 - [x] `phase_lock_shift_constant_11_over_8` (optional heuristic marker, now definitional)

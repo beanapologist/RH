@@ -1034,9 +1034,18 @@ lemma Gammaℝ_conj (s : ℂ) :
   unfold Gammaℝ
   simpa [map_mul] using congrArg2 (fun a b => a * b) hcpow hGamma
 
-/-- Boundary axiom lowered to the completed Hurwitz-even level away from the update point `s = 0`. -/
-variable (completedHurwitzZetaEven_zero_conj_of_ne_zero : ∀ s : ℂ, s ≠ 0 →
-  Complex.conj (completedHurwitzZetaEven 0 s) = completedHurwitzZetaEven 0 (Complex.conj s))
+/-- Bundled conjugation boundary input at the completed Hurwitz-even level (`a = 0`). -/
+def ConjugationBoundaryInput : Prop :=
+  ∀ s : ℂ, s ≠ 0 →
+    Complex.conj (completedHurwitzZetaEven 0 s) = completedHurwitzZetaEven 0 (Complex.conj s)
+
+/-- Active bundled conjugation boundary assumption. -/
+variable (conjugationBoundaryInput_assumption : ConjugationBoundaryInput)
+
+/-- Projected completed Hurwitz-even conjugation boundary away from `s = 0`. -/
+theorem completedHurwitzZetaEven_zero_conj_of_ne_zero (s : ℂ) (hs : s ≠ 0) :
+    Complex.conj (completedHurwitzZetaEven 0 s) = completedHurwitzZetaEven 0 (Complex.conj s) := by
+  exact conjugationBoundaryInput_assumption s hs
 
 /-- Generic conjugation lift from completed Hurwitz-even (`a=0`) to Hurwitz-even (`a=0`). -/
 theorem hurwitzZetaEven_zero_conj_of_completed_boundary
@@ -2018,8 +2027,9 @@ Xi/log-derivative layer:
 4. `completedRiemannZeta_factor_bridge_at_exceptional_lattice` (DISCHARGED)
   this boundary is now a proved theorem (`simp` on lattice sites `s = -2n`)
   and feeds directly into the global bridge theorem
-5. `completedHurwitzZetaEven_zero_conj_of_ne_zero`
-  the theorem `hurwitzZetaEven_zero_conj` is now proved from this completed-level
+5. `conjugationBoundaryInput_assumption`
+  projects to `completedHurwitzZetaEven_zero_conj_of_ne_zero`; the theorem
+  `hurwitzZetaEven_zero_conj` is now proved from this completed-level
   nonzero boundary together with `Gammaℝ_conj` and the explicit `s = 0` case
 6. `phase_lock_shift_constant_11_over_8` (definitional marker, inhabited by
   `phase_lock_shift_constant_11_over_8_holds`)
@@ -4898,7 +4908,7 @@ end FourAxioms
     • `conditional_RH_via_torus_compatibility_frontier`
 
     Supporting analytic boundaries (outside the minimal endpoint frontier):
-    • `completedHurwitzZetaEven_zero_conj_of_ne_zero`
+    • `conjugationBoundaryInput_assumption`
     • `xi_gap_factor_nonzero_off_critical`  -- compatibility theorem (derived from frontier assumptions)
     Prototype target (currently not an active global assumption):
     • `xi_logderiv_formula`
@@ -4912,6 +4922,8 @@ end FourAxioms
     • `phase_lock_shift_constant_11_over_8`
     Localized compatibility input (not active globally):
     • `xi_partial_defect2D_factor_boundary` (used only by `defect_factors`)
+    Projected interface (from bundled conjugation boundary input):
+    • `completedHurwitzZetaEven_zero_conj_of_ne_zero`
 
     (Frontier assumptions are listed once above under the strong-defect and
     window-limit packaging sections to avoid duplication.)
