@@ -3434,12 +3434,36 @@ theorem zeta_zero_is_limit_of_window_zeros_of_F_lattice_boundary
 def Step1_window_zero_limit_target : Prop :=
   window_zero_limit_boundary
 
+/-- Local epsilon-approximation schema at zeta zeros using finite-window lattice zeros. -/
+def Step1LocalApproximationSchema : Prop :=
+  ∀ s : ℂ, riemannZeta s = 0 →
+    ∀ ε : ℝ, 0 < ε →
+      ∃ N : ℕ, ∃ σ t : ℝ,
+        F_lattice N σ t = 0 ∧ ‖latticePoint σ t - s‖ < ε
+
 /-- Named approximation frontier for Step 1 (Hurwitz/Rouché-style landing interface). -/
 def Step1ApproximationFrontier : Prop :=
   F_lattice_zero_limit_boundary
+  ∧ Step1LocalApproximationSchema
   ∧
   (∀ N : ℕ, ∀ s : ℂ,
     F_lattice N s.re s.im = partialEulerWindowFunction N s)
+
+/-- The lattice zero-limit boundary implies local epsilon-approximation at zeta zeros. -/
+theorem step1_local_approximation_of_F_lattice_boundary
+    (hF : F_lattice_zero_limit_boundary) :
+    Step1LocalApproximationSchema := by
+  intro s hz ε hε
+  rcases hF s hz with ⟨σN, tN, hFzero, hFtendsto⟩
+  have hball : Metric.ball s ε ∈ nhds s := Metric.ball_mem_nhds s hε
+  have hEventual :
+      ∀ᶠ N in Filter.atTop, latticePoint (σN N) (tN N) ∈ Metric.ball s ε :=
+    hFtendsto hball
+  rcases Filter.eventually_atTop.1 hEventual with ⟨N0, hN0⟩
+  refine ⟨N0, σN N0, tN N0, hFzero N0, ?_⟩
+  have hmem : latticePoint (σN N0) (tN N0) ∈ Metric.ball s ε :=
+    hN0 N0 le_rfl
+  simpa [Metric.mem_ball, dist_eq_norm] using hmem
 
 /-- The lattice channel identity in `Step1ApproximationFrontier` is definitional. -/
 theorem step1_lattice_channel_identity :
@@ -3456,7 +3480,8 @@ theorem step1_lattice_channel_identity :
 theorem step1_approximation_frontier_of_F_lattice_boundary
     (hF : F_lattice_zero_limit_boundary) :
     Step1ApproximationFrontier := by
-  exact ⟨hF, step1_lattice_channel_identity⟩
+  exact ⟨hF, step1_local_approximation_of_F_lattice_boundary hF,
+    step1_lattice_channel_identity⟩
 
 /-- The Step-1 approximation frontier implies the Step-1 endpoint target. -/
 theorem step1_target_of_approximation_frontier

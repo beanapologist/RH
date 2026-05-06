@@ -69,7 +69,7 @@ Execution status notes:
 - Lattice-native closure routing is in place (`F(s,t)` boundary -> window zero limit -> phase-lock bridge -> RH endpoint).
 - `phase_lock_from_window_limit` is a theorem (no placeholder), but currently depends on strong-defect assumptions already declared in the file.
 - `zeta_zero_is_limit_of_window_zeros` is now derived from the active Step-1 assumption.
-- Step-1 landing interface is now explicit and non-alias: `Step1ApproximationFrontier` bundles lattice zero-limit boundary plus lattice-to-window channel coherence.
+- Step-1 landing interface is now explicit and non-alias: `Step1ApproximationFrontier` packages lattice zero-limit boundary + local epsilon-approximation at zeta zeros + lattice/window channel identity.
 - `xi_logderiv_formula` and `completedHurwitzZetaEven_zero_conj_of_ne_zero` remain high-value analytic discharge targets.
 
 Recommended order (dependency-first), now tracked as a checklist:
