@@ -2011,7 +2011,8 @@ Xi/log-derivative layer:
   nonzero boundary together with `Gammaℝ_conj` and the explicit `s = 0` case
 6. `phase_lock_shift_constant_11_over_8` (definitional marker, inhabited by
   `phase_lock_shift_constant_11_over_8_holds`)
-7. `xi_partial_defect2D_factor_boundary`
+7. `xi_partial_defect2D_factor_boundary` (localized compatibility input for
+  `defect_factors`, not an active global assumption)
 8. `xi_defect_profile_nonzero_off_critical`
   this is the narrowed final defect-profile boundary (finite-window form)
   with an eventual uniform lower bound at off-critical strip points
@@ -3227,18 +3228,16 @@ lemma lorentzian_x_reflect (s : ℂ) :
   simp
   ring
 
-/-- Boundary factorization input for the 2-D defect:
-`D_N(s) = (Re(s)-1/2) * M_N(s)` with an auxiliary profile `M_N`. -/
-variable (xi_partial_defect2D_factor_boundary : ∀ S : Finset ℕ,
-    ∃ M : ℂ → ℂ, ∀ s : ℂ,
-  xi_partial_defect2D S s = ((lorentzian_x s : ℂ)) * M s)
-
 /-- `N`-indexed Lorentzian factorization of the defect:
 `D_N(s) = (Re(s)-1/2) * M_N(s)` for some profile `M_N`. -/
-lemma defect_factors (N : ℕ) :
+lemma defect_factors
+    (hfactor_boundary : ∀ S : Finset ℕ,
+      ∃ M : ℂ → ℂ, ∀ s : ℂ,
+        xi_partial_defect2D S s = ((lorentzian_x s : ℂ)) * M s)
+    (N : ℕ) :
     ∃ M : ℂ → ℂ, ∀ s : ℂ,
       defect N s = ((s.re - 1 / 2 : ℝ) : ℂ) * M s := by
-  rcases xi_partial_defect2D_factor_boundary (prime_window N) with ⟨M, hM⟩
+  rcases hfactor_boundary (prime_window N) with ⟨M, hM⟩
   refine ⟨M, ?_⟩
   intro s
   simpa [defect_eq_xi_partial_defect2D_window, lorentzian_x] using hM s
@@ -4798,12 +4797,13 @@ end FourAxioms
     • `xi_logderiv_symmetry_sum`
     • `phase_velocity_on_critical_line`
     • `completedHurwitzZetaEven_zero_conj_of_ne_zero`
-    • `xi_partial_defect2D_factor_boundary`
     • `missingPrimeCore_cauchy_tail`
     • `partialEulerPhaseVelocity_window_tendsto`
     • `xi_gap_factor_nonzero_off_critical`  -- compatibility theorem (derived from frontier assumptions)
     Optional compatibility marker (not an active boundary assumption):
     • `phase_lock_shift_constant_11_over_8`
+    Localized compatibility input (not active globally):
+    • `xi_partial_defect2D_factor_boundary` (used only by `defect_factors`)
 
     (Frontier assumptions are listed once above under the strong-defect and
     window-limit packaging sections to avoid duplication.)

@@ -54,7 +54,8 @@ The canonical source factor **B = 1 + i** connects to the unit-circle crossing l
 **Not Formalized (explicit boundary axioms):**
 - **Window-limit frontier (active Step-1 form):** `Step1ApproximationFrontier_assumption`
 - **Strong-defect frontier:** `xi_defect_profile_nonzero_off_critical`, `xi_partial_defect2D_window_tendsto_zero`
-- **Supporting boundaries:** `xi_logderiv_formula`, `xi_logderiv_symmetry_sum`, `phase_velocity_on_critical_line`, `completedHurwitzZetaEven_zero_conj_of_ne_zero`, `xi_partial_defect2D_factor_boundary`, `missingPrimeCore_cauchy_tail`, `partialEulerPhaseVelocity_window_tendsto`
+- **Supporting boundaries:** `xi_logderiv_formula`, `xi_logderiv_symmetry_sum`, `phase_velocity_on_critical_line`, `completedHurwitzZetaEven_zero_conj_of_ne_zero`, `missingPrimeCore_cauchy_tail`, `partialEulerPhaseVelocity_window_tendsto`
+- **Localized compatibility input (not active globally):** `xi_partial_defect2D_factor_boundary` (used only by `defect_factors`)
 - **Optional compatibility marker (definitional):** `phase_lock_shift_constant_11_over_8`
 
 See end of `RH.lean` for full inventory.
@@ -84,7 +85,7 @@ Recommended order (dependency-first), now tracked as a checklist:
 - [ ] `phase_velocity_on_critical_line` (chain-rule/branch theorem on critical line)
 - [ ] `completedHurwitzZetaEven_zero_conj_of_ne_zero` (completed Hurwitz-even conjugation)
 - [x] `completedRiemannZeta_conj` (derived globally from established conjugation lemmas)
-- [ ] `xi_partial_defect2D_factor_boundary` (replace factor-boundary placeholder with theorem)
+- [x] `xi_partial_defect2D_factor_boundary` (localized compatibility input; removed from active global assumptions)
 - [x] `phase_lock_shift_constant_11_over_8` (optional heuristic marker, now definitional)
 
 **Milestone criterion:**
