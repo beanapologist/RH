@@ -3431,13 +3431,13 @@ def Step1_window_zero_limit_target : Prop :=
 
 /-- Named approximation frontier for Step 1 (Hurwitz/Rouché-style landing interface). -/
 def Step1ApproximationFrontier : Prop :=
-  window_zero_limit_boundary
+  F_lattice_zero_limit_boundary
 
-/-- The Step-1 approximation frontier is exactly the Step-1 endpoint target. -/
+/-- The Step-1 approximation frontier implies the Step-1 endpoint target. -/
 theorem step1_target_of_approximation_frontier
     (hA : Step1ApproximationFrontier) :
     Step1_window_zero_limit_target := by
-  exact hA
+  exact zeta_zero_is_limit_of_window_zeros_of_F_lattice_boundary hA
 
 /-- Active Step-1 assumption for the endpoint route. -/
 variable (Step1_window_zero_limit_target_assumption : Step1_window_zero_limit_target)
