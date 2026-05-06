@@ -3429,6 +3429,16 @@ theorem zeta_zero_is_limit_of_window_zeros_of_F_lattice_boundary
 def Step1_window_zero_limit_target : Prop :=
   window_zero_limit_boundary
 
+/-- Named approximation frontier for Step 1 (Hurwitz/Rouché-style landing interface). -/
+def Step1ApproximationFrontier : Prop :=
+  window_zero_limit_boundary
+
+/-- The Step-1 approximation frontier is exactly the Step-1 endpoint target. -/
+theorem step1_target_of_approximation_frontier
+    (hA : Step1ApproximationFrontier) :
+    Step1_window_zero_limit_target := by
+  exact hA
+
 /-- Active Step-1 assumption for the endpoint route. -/
 variable (Step1_window_zero_limit_target_assumption : Step1_window_zero_limit_target)
 
@@ -3470,6 +3480,13 @@ theorem lattice_boundary_discharged_of_step1
     (hStep1 : Step1_window_zero_limit_target) :
     F_lattice_zero_limit_boundary := by
   exact F_lattice_zero_limit_boundary_of_zeta_zero_is_limit_of_window_zeros hStep1
+
+/-- Discharging the named Step-1 approximation frontier discharges the lattice boundary. -/
+theorem lattice_boundary_discharged_of_step1_approximation_frontier
+    (hA : Step1ApproximationFrontier) :
+    F_lattice_zero_limit_boundary := by
+  exact lattice_boundary_discharged_of_step1
+    (step1_target_of_approximation_frontier hA)
 
 /-- The current assumptions instantiate the `F(s,t)` lattice zero-limit boundary. -/
 theorem F_lattice_zero_limit_boundary_holds :
