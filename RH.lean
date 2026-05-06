@@ -1801,24 +1801,9 @@ lemma phase_lock_iter_limit_is_implicit_root_of_limit_fixed_points
   intro t ht
   exact phase_lock_implicit_of_fixed_point_of_admissible n t (hfix_lim t ht) (hadm_lim t ht)
 
-/-- Window-defect closure boundary:
-the finite-window 2-D defect tends to zero at each point. -/
-variable (xi_partial_defect2D_window_tendsto_zero : ∀ s : ℂ,
-    Filter.Tendsto (fun N : ℕ => xi_partial_defect2D (prime_window N) s) Filter.atTop
-  (nhds (0 : ℂ)))
-
-/-- Final profile-local endpoint boundary (finite-window form).
-
-Off the critical line in the open strip, one can choose a defect factor profile
-`M_N` for each window defect `D_N` with a uniform eventual lower bound
-at the target point `s`.
-
-Source/medium/sink reading used in this development:
-- source: `lorentzian_x z = Re(z) - 1/2`
-- medium: defect profile channel `M_N z`
-- sink: reflected defect output `D_N(z) = xi_partial_defect2D (prime_window N) z`
-with `D_N = source * medium`. -/
-variable (xi_defect_profile_nonzero_off_critical : ∀ s : ℂ,
+/-- Bundled strong-defect boundary input used by the 2-D rigidity route. -/
+def StrongDefectBoundaryInput : Prop :=
+  (∀ s : ℂ,
     (h_nontrivial : 0 < s.re ∧ s.re < 1)
     (h_off : s.re ≠ 1 / 2) :
     ∃ M : ℕ → ℂ → ℂ,
@@ -1826,6 +1811,30 @@ variable (xi_defect_profile_nonzero_off_critical : ∀ s : ℂ,
         xi_partial_defect2D (prime_window N) z = ((lorentzian_x z : ℂ)) * M N z)
       ∧
       ∃ δ : ℝ, 0 < δ ∧ ∃ N0 : ℕ, ∀ N : ℕ, N0 ≤ N → δ ≤ ‖M N s‖)
+  ∧
+  (∀ s : ℂ,
+    Filter.Tendsto (fun N : ℕ => xi_partial_defect2D (prime_window N) s) Filter.atTop
+      (nhds (0 : ℂ)))
+
+/-- Active bundled strong-defect boundary assumption. -/
+variable (strongDefectBoundaryInput_assumption : StrongDefectBoundaryInput)
+
+/-- Final profile-local endpoint boundary projected from the bundled strong-defect input. -/
+theorem xi_defect_profile_nonzero_off_critical (s : ℂ)
+    (h_nontrivial : 0 < s.re ∧ s.re < 1)
+    (h_off : s.re ≠ 1 / 2) :
+    ∃ M : ℕ → ℂ → ℂ,
+      (∀ N : ℕ, ∀ z : ℂ,
+        xi_partial_defect2D (prime_window N) z = ((lorentzian_x z : ℂ)) * M N z)
+      ∧
+      ∃ δ : ℝ, 0 < δ ∧ ∃ N0 : ℕ, ∀ N : ℕ, N0 ≤ N → δ ≤ ‖M N s‖ := by
+  exact strongDefectBoundaryInput_assumption.1 s h_nontrivial h_off
+
+/-- Window-defect closure boundary projected from the bundled strong-defect input. -/
+theorem xi_partial_defect2D_window_tendsto_zero (s : ℂ) :
+    Filter.Tendsto (fun N : ℕ => xi_partial_defect2D (prime_window N) s) Filter.atTop
+      (nhds (0 : ℂ)) := by
+  exact strongDefectBoundaryInput_assumption.2 s
 
 /-- Final endpoint-axiom restatement (profile-local finite-window form).
 
@@ -2016,12 +2025,11 @@ Xi/log-derivative layer:
   `phase_lock_shift_constant_11_over_8_holds`)
 7. `xi_partial_defect2D_factor_boundary` (localized compatibility input for
   `defect_factors`, not an active global assumption)
-8. `xi_defect_profile_nonzero_off_critical`
-  this is the narrowed final defect-profile boundary (finite-window form)
-  with an eventual uniform lower bound at off-critical strip points
-9. `xi_partial_defect2D_window_tendsto_zero`
-  window-defect zero-closure bridge; together with item 8,
-  this yields `phase_lock_rigidity_from_2D_defect_boundary_strong`
+8. `strongDefectBoundaryInput_assumption`
+  bundled strong-defect boundary input; projects to:
+  - `xi_defect_profile_nonzero_off_critical`
+  - `xi_partial_defect2D_window_tendsto_zero`
+  and yields `phase_lock_rigidity_from_2D_defect_boundary_strong`
 
 Reduced boundary core (prototype reductions now formalized):
 1. Item 2 reduces to item 1 plus reflected ξ-log-derivative input:
@@ -4859,6 +4867,8 @@ end FourAxioms
 
   NOT FORMALIZED (explicit analytic boundary axioms still assumed):
     Minimal strong-defect frontier (alternative route via `conditional_RH_from_strong_defect_frontier`):
+    • `strongDefectBoundaryInput_assumption`
+    Projected interfaces:
     • `xi_defect_profile_nonzero_off_critical`
     • `xi_partial_defect2D_window_tendsto_zero`
     Interface names:
@@ -4937,7 +4947,8 @@ end FourAxioms
 
       Entry:          `conditional_RH_from_strong_defect_frontier`
       Frontier:       `StrongDefectFrontier`
-      Key axioms:     xi_defect_profile_nonzero_off_critical, xi_partial_defect2D_window_tendsto_zero
+      Key axiom:      strongDefectBoundaryInput_assumption
+      Projected data: xi_defect_profile_nonzero_off_critical, xi_partial_defect2D_window_tendsto_zero
       Grounding:      From multiplicative source/medium/sink decomposition of finite-window defects
       Theorem chain:  defect factorization → lower-bounded medium profile → zero-closure contradiction
       Status:         Structurally sound but less grounded than window-limit route

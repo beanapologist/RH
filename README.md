@@ -31,7 +31,8 @@ The current development does not claim an unconditional machine-checked proof of
 **Alternative strong-defect route:** 
 - `conditional_RH_from_strong_defect_frontier` — Purely algebraic rigidity via defect factorization
 - Valid but more abstract; use if you prefer source/medium/sink narrative
-- Requires: `xi_defect_profile_nonzero_off_critical`, `xi_partial_defect2D_window_tendsto_zero`
+- Requires bundled input: `strongDefectBoundaryInput_assumption`
+- Projected interfaces: `xi_defect_profile_nonzero_off_critical`, `xi_partial_defect2D_window_tendsto_zero`
 
 ## Geometric Bridge
 
@@ -53,7 +54,8 @@ The canonical source factor **B = 1 + i** connects to the unit-circle crossing l
 
 **Not Formalized (explicit boundary axioms):**
 - **Window-limit frontier (active Step-1 form):** `Step1ApproximationFrontier_assumption`
-- **Strong-defect frontier:** `xi_defect_profile_nonzero_off_critical`, `xi_partial_defect2D_window_tendsto_zero`
+- **Strong-defect frontier (active bundled form):** `strongDefectBoundaryInput_assumption`
+- **Projected interfaces:** `xi_defect_profile_nonzero_off_critical`, `xi_partial_defect2D_window_tendsto_zero`
 - **Supporting boundaries:** `completedHurwitzZetaEven_zero_conj_of_ne_zero`
 - **Prototype target (currently not active global assumption):** `xi_logderiv_formula` (threaded as explicit input to reduction prototypes)
 - **Step-1 consumed analytic bridges (not active global assumptions):** `missingPrimeCore_cauchy_tail` -> `step1_tail_control_of_missingPrimeCore_cauchy_tail`, `partialEulerPhaseVelocity_window_tendsto` -> `step1_velocity_transfer_of_partialEulerPhaseVelocity_window_tendsto`, `phase_velocity_on_critical_line` -> `step1_phase_velocity_identity_of_assumption`
@@ -81,8 +83,9 @@ Execution status notes:
 Recommended order (dependency-first), now tracked as a checklist:
 
 - [ ] `Step1ApproximationFrontier_assumption` (prove Step-1 approximation frontier)
-- [ ] `xi_partial_defect2D_window_tendsto_zero` (prove defect closure to zero)
-- [ ] `xi_defect_profile_nonzero_off_critical` (prove eventual off-critical lower bound)
+- [ ] `strongDefectBoundaryInput_assumption` (prove bundled strong-defect boundary input)
+- [ ] `xi_partial_defect2D_window_tendsto_zero` (projected interface from bundled input)
+- [ ] `xi_defect_profile_nonzero_off_critical` (projected interface from bundled input)
 - [x] `missingPrimeCore_cauchy_tail` (consumed into Step-1 frontier via bridge theorem)
 - [x] `partialEulerPhaseVelocity_window_tendsto` (consumed into Step-1 frontier via bridge theorem)
 - [x] `xi_logderiv_formula` (removed from active global assumptions; currently threaded as explicit prototype input)
