@@ -689,20 +689,17 @@ under explicit names so they can be refined into full proofs incrementally.
 /-- Digamma shorthand in this file: ψ(z) = Γ'(z) / Γ(z). -/
 noncomputable def digamma (z : ℂ) : ℂ := deriv Complex.Gamma z / Complex.Gamma z
 
-/-- Log-derivative decomposition for ξ.
-This is the analytic identity underlying the phase/magnitude split. -/
-variable (xi_logderiv_formula : ∀ s : ℂ,
-    deriv xi s / xi s
-      = (1 : ℂ) / s
-      + (1 : ℂ) / (s - 1)
-      - ((Real.log Real.pi) / 2 : ℂ)
-      + (1 / 2 : ℂ) * digamma (s / 2)
-      + deriv riemannZeta s / riemannZeta s)
-
 /-- Item-2 reduction prototype:
 the symmetric digamma/zeta sum follows from item 1 once one has
 the reflected ξ-log-derivative relation `Lξ(1-s) = -Lξ(s)`. -/
 theorem xi_logderiv_symmetry_sum_of_xi_logderiv_formula
+    (hxi_logderiv_formula : ∀ s : ℂ,
+      deriv xi s / xi s
+        = (1 : ℂ) / s
+        + (1 : ℂ) / (s - 1)
+        - ((Real.log Real.pi) / 2 : ℂ)
+        + (1 / 2 : ℂ) * digamma (s / 2)
+        + deriv riemannZeta s / riemannZeta s)
     (hxi_reflect_logderiv : ∀ s : ℂ,
       deriv xi (1 - s) / xi (1 - s) = -(deriv xi s / xi s)) :
     ∀ s : ℂ,
@@ -718,7 +715,7 @@ theorem xi_logderiv_symmetry_sum_of_xi_logderiv_formula
           - ((Real.log Real.pi) / 2 : ℂ)
           + (1 / 2 : ℂ) * digamma (s / 2)
           + deriv riemannZeta s / riemannZeta s :=
-    xi_logderiv_formula s
+            hxi_logderiv_formula s
   have h1s :
       deriv xi (1 - s) / xi (1 - s)
         = (1 : ℂ) / (1 - s)
@@ -726,7 +723,7 @@ theorem xi_logderiv_symmetry_sum_of_xi_logderiv_formula
           - ((Real.log Real.pi) / 2 : ℂ)
           + (1 / 2 : ℂ) * digamma ((1 - s) / 2)
           + deriv riemannZeta (1 - s) / riemannZeta (1 - s) :=
-    xi_logderiv_formula (1 - s)
+            hxi_logderiv_formula (1 - s)
   have h1s' :
       -(deriv xi s / xi s)
         = (1 : ℂ) / (1 - s)
@@ -841,6 +838,13 @@ are provided explicitly:
 1. chain-rule derivative of `u ↦ xi(1/2 + u i)` along the real line,
 2. slit-plane branch admissibility for `log ∘ xi` on that line. -/
 theorem phase_velocity_on_critical_line_of_xi_logderiv_formula
+    (hxi_logderiv_formula : ∀ s : ℂ,
+      deriv xi s / xi s
+        = (1 : ℂ) / s
+        + (1 : ℂ) / (s - 1)
+        - ((Real.log Real.pi) / 2 : ℂ)
+        + (1 / 2 : ℂ) * digamma (s / 2)
+        + deriv riemannZeta s / riemannZeta s)
     (hlineDeriv : ∀ t : ℝ,
       HasDerivAt (fun u : ℝ => xi ((1 / 2 : ℂ) + u * Complex.I))
         (Complex.I * deriv xi ((1 / 2 : ℂ) + t * Complex.I)) t)
@@ -860,7 +864,7 @@ theorem phase_velocity_on_critical_line_of_xi_logderiv_formula
       simpa [s] using (HasDerivAt.clog_real (hlineDeriv t) (hlineSlit t))
     exact hHas.deriv
   have hxi : deriv xi s / xi s = xi_logderiv_core_on_line t := by
-    simpa [s, xi_logderiv_core_on_line] using xi_logderiv_formula s
+    simpa [s, xi_logderiv_core_on_line] using hxi_logderiv_formula s
   calc
     deriv (fun u : ℝ => Complex.log (xi ((1 / 2 : ℂ) + u * Complex.I))) t
         = (Complex.I * deriv xi s) / xi s := hlogDeriv
@@ -1996,7 +2000,8 @@ theorem xi_real_rigidity_via_2D_defect (s : ℂ)
 The remaining unformalized boundary is explicit and split into two layers.
 
 Xi/log-derivative layer:
-1. `xi_logderiv_formula`
+1. `xi_logderiv_formula` (prototype target; currently represented as explicit
+  input to the reduction theorems below, not an active global assumption)
 2. `xi_logderiv_symmetry_sum` (prototype target; currently represented by
   `xi_logderiv_symmetry_sum_of_xi_logderiv_formula` with explicit reflected-logderiv input)
 3. `phase_velocity_on_critical_line` (consumed by
@@ -4883,10 +4888,10 @@ end FourAxioms
     • `conditional_RH_via_torus_compatibility_frontier`
 
     Supporting analytic boundaries (outside the minimal endpoint frontier):
-    • `xi_logderiv_formula`
     • `completedHurwitzZetaEven_zero_conj_of_ne_zero`
     • `xi_gap_factor_nonzero_off_critical`  -- compatibility theorem (derived from frontier assumptions)
     Prototype target (currently not an active global assumption):
+    • `xi_logderiv_formula`
     • `xi_logderiv_symmetry_sum`
     Step-1 consumed analytic bridges (not active global assumptions):
     • `missingPrimeCore_cauchy_tail` -> `step1_tail_control_of_missingPrimeCore_cauchy_tail`
