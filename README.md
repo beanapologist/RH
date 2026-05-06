@@ -13,7 +13,7 @@ The current development does not claim an unconditional machine-checked proof of
 - Routes through `conditional_RH_via_window_limits`, now expressed via `conditional_RH_via_torus_compatibility_frontier`
 - Uses the **torus-compatibility frontier** as the canonical top-level endpoint interface whose window-limit projection closes RH
 - Grounded in analytic theory: lattice-window zeros converge to strip limits, then phase-lock/rigidity closes on the critical line
-- Active boundary assumption: `F_lattice_zero_limit_boundary_assumption`
+- Active boundary assumption: `Step1_window_zero_limit_target_assumption`
 - Derived interface: `zeta_zero_is_limit_of_window_zeros`
 
 **Unified torus-compatibility frontier (canonical top-level endpoint interface):**
@@ -52,7 +52,7 @@ The canonical source factor **B = 1 + i** connects to the unit-circle crossing l
 - Unit-circle crossing locus characterization
 
 **Not Formalized (explicit boundary axioms):**
-- **Window-limit frontier (active lattice form):** `F_lattice_zero_limit_boundary_assumption`
+- **Window-limit frontier (active Step-1 form):** `Step1_window_zero_limit_target_assumption`
 - **Strong-defect frontier:** `xi_defect_profile_nonzero_off_critical`, `xi_partial_defect2D_window_tendsto_zero`
 - **Supporting boundaries:** `xi_logderiv_formula`, `xi_logderiv_symmetry_sum`, `phase_velocity_on_critical_line`, `completedHurwitzZetaEven_zero_conj_of_ne_zero`, `xi_partial_defect2D_factor_boundary`, `missingPrimeCore_cauchy_tail`, `partialEulerPhaseVelocity_window_tendsto`, `phase_lock_shift_constant_11_over_8`
 
@@ -72,7 +72,7 @@ Execution status notes:
 
 Recommended order (dependency-first), now tracked as a checklist:
 
-- [ ] `F_lattice_zero_limit_boundary_assumption` (replace with proved lattice zero-limit theorem)
+- [ ] `Step1_window_zero_limit_target_assumption` (prove Step-1 window-zero limit boundary)
 - [ ] `xi_partial_defect2D_window_tendsto_zero` (prove defect closure to zero)
 - [ ] `xi_defect_profile_nonzero_off_critical` (prove eventual off-critical lower bound)
 - [ ] `missingPrimeCore_cauchy_tail` (prove missing-prime tails are Cauchy)
