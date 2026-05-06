@@ -1065,29 +1065,32 @@ theorem hurwitzZetaEven_zero_conj (s : ℂ) :
   exact hurwitzZetaEven_zero_conj_of_completed_boundary
     completedHurwitzZetaEven_zero_conj_of_ne_zero s
 
-/-- Prototype replacement interface for item 5:
-it is enough to assume conjugation symmetry for `completedRiemannZeta`. -/
-variable (completedRiemannZeta_conj : ∀ s : ℂ,
-  Complex.conj (completedRiemannZeta s) = completedRiemannZeta (Complex.conj s))
-
 /-- Item-5 boundary as a consequence of `completedRiemannZeta` conjugation symmetry. -/
 theorem completedHurwitzZetaEven_zero_conj_of_ne_zero_of_completedRiemannZeta_conj
+    (hcompletedRiemannZeta_conj : ∀ s : ℂ,
+      Complex.conj (completedRiemannZeta s) = completedRiemannZeta (Complex.conj s))
     (s : ℂ) (_hs : s ≠ 0) :
     Complex.conj (completedHurwitzZetaEven 0 s) = completedHurwitzZetaEven 0 (Complex.conj s) := by
-  simpa [completedRiemannZeta] using completedRiemannZeta_conj s
+  simpa [completedRiemannZeta] using hcompletedRiemannZeta_conj s
 
 /-- Alternative derived Hurwitz-even conjugation chain through `completedRiemannZeta` symmetry. -/
-theorem hurwitzZetaEven_zero_conj_of_completedRiemannZeta_conj (s : ℂ) :
+theorem hurwitzZetaEven_zero_conj_of_completedRiemannZeta_conj
+    (hcompletedRiemannZeta_conj : ∀ s : ℂ,
+      Complex.conj (completedRiemannZeta s) = completedRiemannZeta (Complex.conj s))
+    (s : ℂ) :
     Complex.conj (hurwitzZetaEven 0 s) = hurwitzZetaEven 0 (Complex.conj s) := by
   exact hurwitzZetaEven_zero_conj_of_completed_boundary
     (completedHurwitzZetaEven_zero_conj_of_ne_zero_of_completedRiemannZeta_conj
-      (completedRiemannZeta_conj := completedRiemannZeta_conj)) s
+      hcompletedRiemannZeta_conj) s
 
 /-- Alternative ζ conjugation chain through `completedRiemannZeta` symmetry. -/
-theorem riemannZeta_conj_of_completedRiemannZeta_conj (s : ℂ) :
+theorem riemannZeta_conj_of_completedRiemannZeta_conj
+    (hcompletedRiemannZeta_conj : ∀ s : ℂ,
+      Complex.conj (completedRiemannZeta s) = completedRiemannZeta (Complex.conj s))
+    (s : ℂ) :
     Complex.conj (riemannZeta s) = riemannZeta (Complex.conj s) := by
   simpa [riemannZeta] using hurwitzZetaEven_zero_conj_of_completedRiemannZeta_conj
-    (completedRiemannZeta_conj := completedRiemannZeta_conj) s
+    hcompletedRiemannZeta_conj s
 
 /-- Reverse prototype direction:
 conjugation symmetry of `riemannZeta` implies conjugation symmetry of `completedRiemannZeta`. -/
@@ -1118,12 +1121,17 @@ theorem completedHurwitzZetaEven_zero_conj_of_ne_zero_of_riemannZeta_conj
     (s : ℂ) (hs : s ≠ 0) :
     Complex.conj (completedHurwitzZetaEven 0 s) = completedHurwitzZetaEven 0 (Complex.conj s) := by
   exact completedHurwitzZetaEven_zero_conj_of_ne_zero_of_completedRiemannZeta_conj
-    (completedRiemannZeta_conj := completedRiemannZeta_conj_of_riemannZeta_conj hriem) s hs
+    (completedRiemannZeta_conj_of_riemannZeta_conj hriem) s hs
 
 /-- Derived ζ-factor conjugation from the Hurwitz-even boundary at `a = 0`. -/
 theorem riemannZeta_conj (s : ℂ) :
   Complex.conj (riemannZeta s) = riemannZeta (Complex.conj s) := by
   simpa [riemannZeta] using hurwitzZetaEven_zero_conj s
+
+/-- Conjugation symmetry for `completedRiemannZeta`, derived from the active Hurwitz boundary chain. -/
+theorem completedRiemannZeta_conj (s : ℂ) :
+    Complex.conj (completedRiemannZeta s) = completedRiemannZeta (Complex.conj s) := by
+  exact completedRiemannZeta_conj_of_riemannZeta_conj riemannZeta_conj s
 
 /-- Conjugation symmetry for ξ, proved from multiplicative factor decomposition. -/
 theorem xi_conj (s : ℂ) :
@@ -3448,10 +3456,21 @@ theorem F_lattice_zero_limit_boundary_iff_window_zero_limit_boundary :
     exact window_zero_limit_to_F_lattice s hlim
 
 /-- The standard window-zero limit boundary induces the `F(s,t)` lattice boundary. -/
-theorem F_lattice_zero_limit_boundary_of_zeta_zero_is_limit_of_window_zeros :
+theorem F_lattice_zero_limit_boundary_of_zeta_zero_is_limit_of_window_zeros
+    (hW : window_zero_limit_boundary) :
     F_lattice_zero_limit_boundary := by
   exact (F_lattice_zero_limit_boundary_iff_window_zero_limit_boundary).2
-    zeta_zero_is_limit_of_window_zeros
+    hW
+
+/-- Step-1 airtight target for the endpoint route: prove the window-zero limit boundary. -/
+def Step1_window_zero_limit_target : Prop :=
+  window_zero_limit_boundary
+
+/-- Discharging Step 1 is exactly enough to remove the active lattice boundary assumption. -/
+theorem lattice_boundary_discharged_of_step1
+    (hStep1 : Step1_window_zero_limit_target) :
+    F_lattice_zero_limit_boundary := by
+  exact F_lattice_zero_limit_boundary_of_zeta_zero_is_limit_of_window_zeros hStep1
 
 /-- The current assumptions instantiate the `F(s,t)` lattice zero-limit boundary. -/
 theorem F_lattice_zero_limit_boundary_holds :
