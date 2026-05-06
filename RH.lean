@@ -2029,7 +2029,7 @@ Reduced boundary core (prototype reductions now formalized):
 Window-limit closure layer:
 1. `missingPrimeCore_cauchy_tail`
 2. `partialEulerPhaseVelocity_window_tendsto`
-3. `Step1_window_zero_limit_target_assumption`
+3. `Step1ApproximationFrontier_assumption`
 4. `zeta_zero_is_limit_of_window_zeros` (derived from item 3)
 5. `phase_lock_from_F_lattice_limit` (via lattice->window conversion)
 6. `phase_lock_from_window_limit`
@@ -2051,7 +2051,7 @@ Minimal strong-defect frontier (alternative route):
 Window-limit packaging frontier (primary route for `conditional_RH_via_window_limits` / `rh_endpoint_master`):
 1. (not used in strong-defect route)
 2. `xi_partial_defect2D_window_tendsto_zero`
-3. `Step1_window_zero_limit_target_assumption`
+3. `Step1ApproximationFrontier_assumption`
 4. `phase_lock_from_F_lattice_limit`
 
 Unified torus-compatibility frontier (canonical top-level interface):
@@ -3439,8 +3439,8 @@ theorem step1_target_of_approximation_frontier
     Step1_window_zero_limit_target := by
   exact zeta_zero_is_limit_of_window_zeros_of_F_lattice_boundary hA
 
-/-- Active Step-1 assumption for the endpoint route. -/
-variable (Step1_window_zero_limit_target_assumption : Step1_window_zero_limit_target)
+/-- Active Step-1 approximation-frontier assumption for the endpoint route. -/
+variable (Step1ApproximationFrontier_assumption : Step1ApproximationFrontier)
 
 /-- Hurwitz-style boundary, now derived from the active Step-1 assumption. -/
 theorem zeta_zero_is_limit_of_window_zeros
@@ -3448,7 +3448,8 @@ theorem zeta_zero_is_limit_of_window_zeros
     ∃ sN : ℕ → ℂ,
       (∀ N : ℕ, partialEulerWindowFunction N (sN N) = 0) ∧
       Filter.Tendsto sN Filter.atTop (nhds s) := by
-  exact Step1_window_zero_limit_target_assumption s hz
+  exact step1_target_of_approximation_frontier
+    Step1ApproximationFrontier_assumption s hz
 
 /-- Boundary equivalence: complex window-zero limits and `F(s,t)` lattice limits are equivalent. -/
 theorem F_lattice_zero_limit_boundary_iff_window_zero_limit_boundary :
@@ -3491,7 +3492,8 @@ theorem lattice_boundary_discharged_of_step1_approximation_frontier
 /-- The current assumptions instantiate the `F(s,t)` lattice zero-limit boundary. -/
 theorem F_lattice_zero_limit_boundary_holds :
     F_lattice_zero_limit_boundary := by
-  exact lattice_boundary_discharged_of_step1 Step1_window_zero_limit_target_assumption
+  exact lattice_boundary_discharged_of_step1_approximation_frontier
+    Step1ApproximationFrontier_assumption
 
 /-- Bridge boundary: if `s` is a limit of window zeros in the strip,
 then ξ is real at `s` (phase-lock survives the limit).
@@ -4701,7 +4703,7 @@ end FourAxioms
 
     Window-limit packaging frontier (used by `conditional_RH_via_window_limits` and
     `rh_endpoint_master`):
-    • `Step1_window_zero_limit_target_assumption`
+    • `Step1ApproximationFrontier_assumption`
     • `phase_lock_from_window_limit`
     Derived interface:
     • `zeta_zero_is_limit_of_window_zeros`
@@ -4745,7 +4747,7 @@ end FourAxioms
       Routing:        `conditional_RH_via_window_limits`
       Top frontier:   `TorusCompatibilityFrontier`
       RH projection:  `WindowLimitFrontier`
-      Key axioms:     Step1_window_zero_limit_target_assumption, phase_lock_from_window_limit
+      Key axioms:     Step1ApproximationFrontier_assumption, phase_lock_from_window_limit
       Derived link:   zeta_zero_is_limit_of_window_zeros (from F-lattice boundary)
       Grounding:      Directly from the analytic theory of ζ-zeros and finite-window approximations
       Narrative:      Ζ-zeros converge to limit points → phase-lock persists → automatic critical-line rigidity
