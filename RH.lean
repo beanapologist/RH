@@ -3440,6 +3440,14 @@ def Step1LocalApproximationSchema : Prop :=
       ∃ N : ℕ, ∃ σ t : ℝ,
         F_lattice N σ t = 0 ∧ ‖latticePoint σ t - s‖ < ε
 
+/-- Tail-control schema for Step 1: window cores form an explicit Cauchy family
+with quantitative control in terms of window differences. -/
+def Step1TailControlSchema : Prop :=
+  ∀ t θ : ℝ,
+    ∀ ε > 0, ∃ N0 : ℕ, ∀ N₁ N₂ : ℕ,
+      N0 ≤ N₁ → N₁ ≤ N₂ →
+      ‖partialEulerPhaseCore_window N₂ t θ - partialEulerPhaseCore_window N₁ t θ‖ < ε
+
 /-- Zero-stability transfer: local lattice zero capture upgrades to a convergent
 window-zero sequence at each zeta zero. -/
 def Step1ZeroStabilityTransfer : Prop :=
@@ -3453,6 +3461,7 @@ def Step1ApproximationFrontier : Prop :=
   F_lattice_zero_limit_boundary
   ∧ Step1LocalApproximationSchema
   ∧ Step1ZeroStabilityTransfer
+  ∧ Step1TailControlSchema
   ∧
   (∀ N : ℕ, ∀ s : ℂ,
     F_lattice N s.re s.im = partialEulerWindowFunction N s)
@@ -3480,6 +3489,29 @@ theorem step1_zero_stability_transfer_of_F_lattice_boundary
   intro s hz
   exact window_zero_limit_from_F_lattice s (hF s hz)
 
+/-- Missing-prime Cauchy-tail control implies the Step-1 window tail-control schema. -/
+theorem step1_tail_control_of_missingPrimeCore_cauchy_tail
+    (hTail : (t θ : ℝ) :
+      ∀ ε > 0, ∃ N0 : ℕ, ∀ N₁ N₂ : ℕ,
+        N0 ≤ N₁ → N₁ ≤ N₂ →
+        ‖missingPrimeCore N₁ N₂ t θ‖ < ε) :
+    Step1TailControlSchema := by
+  intro t θ ε hε
+  rcases hTail t θ ε hε with ⟨N0, hN0⟩
+  refine ⟨N0, ?_⟩
+  intro N₁ N₂ hle₁ hle₂
+  have href := partialEulerPhaseCore_window_refine hle₂ t θ
+  have hdiff :
+      partialEulerPhaseCore_window N₂ t θ - partialEulerPhaseCore_window N₁ t θ
+        = missingPrimeCore N₁ N₂ t θ := by
+    linarith [href]
+  have hnorm :
+      ‖partialEulerPhaseCore_window N₂ t θ - partialEulerPhaseCore_window N₁ t θ‖
+        = ‖missingPrimeCore N₁ N₂ t θ‖ := by
+    simpa [hdiff]
+  have htail := hN0 N₁ N₂ hle₁ hle₂
+  simpa [hnorm] using htail
+
 /-- The lattice channel identity in `Step1ApproximationFrontier` is definitional. -/
 theorem step1_lattice_channel_identity :
     ∀ N : ℕ, ∀ s : ℂ,
@@ -3493,18 +3525,24 @@ theorem step1_lattice_channel_identity :
 
 /-- Any lattice zero-limit boundary satisfies the full Step-1 approximation frontier. -/
 theorem step1_approximation_frontier_of_F_lattice_boundary
-    (hF : F_lattice_zero_limit_boundary) :
+    (hF : F_lattice_zero_limit_boundary)
+    (hTail : (t θ : ℝ) :
+      ∀ ε > 0, ∃ N0 : ℕ, ∀ N₁ N₂ : ℕ,
+        N0 ≤ N₁ → N₁ ≤ N₂ →
+        ‖missingPrimeCore N₁ N₂ t θ‖ < ε) :
     Step1ApproximationFrontier := by
   exact ⟨hF, step1_local_approximation_of_F_lattice_boundary hF,
     step1_zero_stability_transfer_of_F_lattice_boundary hF,
+    step1_tail_control_of_missingPrimeCore_cauchy_tail hTail,
     step1_lattice_channel_identity⟩
 
 /-- The Step-1 approximation frontier implies the Step-1 endpoint target. -/
 theorem step1_target_of_approximation_frontier
     (hA : Step1ApproximationFrontier) :
     Step1_window_zero_limit_target := by
+  rcases hA with ⟨_hF, _hLocal, hZero, _hTail, _hChan⟩
   intro s hz
-  rcases hA.2.1 s hz with ⟨sN, hsNzero, hsNtendsto⟩
+  rcases hZero s hz with ⟨sN, hsNzero, hsNtendsto⟩
   refine ⟨sN, ?_, hsNtendsto⟩
   intro N
   simpa [zeros_of_partial] using hsNzero N
