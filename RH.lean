@@ -3448,6 +3448,12 @@ def Step1TailControlSchema : Prop :=
       N0 ≤ N₁ → N₁ ≤ N₂ →
       ‖partialEulerPhaseCore_window N₂ t θ - partialEulerPhaseCore_window N₁ t θ‖ < ε
 
+/-- Velocity-transfer schema for Step 1: window velocity converges to ξ-core velocity. -/
+def Step1VelocityTransferSchema : Prop :=
+  ∀ t θ : ℝ,
+    Filter.Tendsto (fun N : ℕ => partialEulerPhaseVelocity_window N t θ)
+      Filter.atTop (nhds (xi_logderiv_core_on_line t))
+
 /-- Zero-stability transfer: local lattice zero capture upgrades to a convergent
 window-zero sequence at each zeta zero. -/
 def Step1ZeroStabilityTransfer : Prop :=
@@ -3462,6 +3468,7 @@ def Step1ApproximationFrontier : Prop :=
   ∧ Step1LocalApproximationSchema
   ∧ Step1ZeroStabilityTransfer
   ∧ Step1TailControlSchema
+  ∧ Step1VelocityTransferSchema
   ∧
   (∀ N : ℕ, ∀ s : ℂ,
     F_lattice N s.re s.im = partialEulerWindowFunction N s)
@@ -3512,6 +3519,15 @@ theorem step1_tail_control_of_missingPrimeCore_cauchy_tail
   have htail := hN0 N₁ N₂ hle₁ hle₂
   simpa [hnorm] using htail
 
+/-- Window-velocity convergence assumption implies the Step-1 velocity-transfer schema. -/
+theorem step1_velocity_transfer_of_partialEulerPhaseVelocity_window_tendsto
+    (hVel : (t θ : ℝ) :
+      Filter.Tendsto (fun N : ℕ => partialEulerPhaseVelocity_window N t θ)
+        Filter.atTop (nhds (xi_logderiv_core_on_line t))) :
+    Step1VelocityTransferSchema := by
+  intro t θ
+  exact hVel t θ
+
 /-- The lattice channel identity in `Step1ApproximationFrontier` is definitional. -/
 theorem step1_lattice_channel_identity :
     ∀ N : ℕ, ∀ s : ℂ,
@@ -3529,18 +3545,22 @@ theorem step1_approximation_frontier_of_F_lattice_boundary
     (hTail : (t θ : ℝ) :
       ∀ ε > 0, ∃ N0 : ℕ, ∀ N₁ N₂ : ℕ,
         N0 ≤ N₁ → N₁ ≤ N₂ →
-        ‖missingPrimeCore N₁ N₂ t θ‖ < ε) :
+        ‖missingPrimeCore N₁ N₂ t θ‖ < ε)
+    (hVel : (t θ : ℝ) :
+      Filter.Tendsto (fun N : ℕ => partialEulerPhaseVelocity_window N t θ)
+        Filter.atTop (nhds (xi_logderiv_core_on_line t))) :
     Step1ApproximationFrontier := by
   exact ⟨hF, step1_local_approximation_of_F_lattice_boundary hF,
     step1_zero_stability_transfer_of_F_lattice_boundary hF,
     step1_tail_control_of_missingPrimeCore_cauchy_tail hTail,
+    step1_velocity_transfer_of_partialEulerPhaseVelocity_window_tendsto hVel,
     step1_lattice_channel_identity⟩
 
 /-- The Step-1 approximation frontier implies the Step-1 endpoint target. -/
 theorem step1_target_of_approximation_frontier
     (hA : Step1ApproximationFrontier) :
     Step1_window_zero_limit_target := by
-  rcases hA with ⟨_hF, _hLocal, hZero, _hTail, _hChan⟩
+  rcases hA with ⟨_hF, _hLocal, hZero, _hTail, _hVel, _hChan⟩
   intro s hz
   rcases hZero s hz with ⟨sN, hsNzero, hsNtendsto⟩
   refine ⟨sN, ?_, hsNtendsto⟩
