@@ -3441,10 +3441,19 @@ def Step1LocalApproximationSchema : Prop :=
       ∃ N : ℕ, ∃ σ t : ℝ,
         F_lattice N σ t = 0 ∧ ‖latticePoint σ t - s‖ < ε
 
+/-- Zero-stability transfer: local lattice zero capture upgrades to a convergent
+window-zero sequence at each zeta zero. -/
+def Step1ZeroStabilityTransfer : Prop :=
+  ∀ s : ℂ, riemannZeta s = 0 →
+    ∃ sN : ℕ → ℂ,
+      (∀ N : ℕ, sN N ∈ zeros_of_partial N) ∧
+      Filter.Tendsto sN Filter.atTop (nhds s)
+
 /-- Named approximation frontier for Step 1 (Hurwitz/Rouché-style landing interface). -/
 def Step1ApproximationFrontier : Prop :=
   F_lattice_zero_limit_boundary
   ∧ Step1LocalApproximationSchema
+  ∧ Step1ZeroStabilityTransfer
   ∧
   (∀ N : ℕ, ∀ s : ℂ,
     F_lattice N s.re s.im = partialEulerWindowFunction N s)
@@ -3465,6 +3474,13 @@ theorem step1_local_approximation_of_F_lattice_boundary
     hN0 N0 le_rfl
   simpa [Metric.mem_ball, dist_eq_norm] using hmem
 
+/-- The lattice zero-limit boundary implies the zero-stability transfer clause. -/
+theorem step1_zero_stability_transfer_of_F_lattice_boundary
+    (hF : F_lattice_zero_limit_boundary) :
+    Step1ZeroStabilityTransfer := by
+  intro s hz
+  exact window_zero_limit_from_F_lattice s (hF s hz)
+
 /-- The lattice channel identity in `Step1ApproximationFrontier` is definitional. -/
 theorem step1_lattice_channel_identity :
     ∀ N : ℕ, ∀ s : ℂ,
@@ -3481,13 +3497,18 @@ theorem step1_approximation_frontier_of_F_lattice_boundary
     (hF : F_lattice_zero_limit_boundary) :
     Step1ApproximationFrontier := by
   exact ⟨hF, step1_local_approximation_of_F_lattice_boundary hF,
+    step1_zero_stability_transfer_of_F_lattice_boundary hF,
     step1_lattice_channel_identity⟩
 
 /-- The Step-1 approximation frontier implies the Step-1 endpoint target. -/
 theorem step1_target_of_approximation_frontier
     (hA : Step1ApproximationFrontier) :
     Step1_window_zero_limit_target := by
-  exact zeta_zero_is_limit_of_window_zeros_of_F_lattice_boundary hA.1
+  intro s hz
+  rcases hA.2.1 s hz with ⟨sN, hsNzero, hsNtendsto⟩
+  refine ⟨sN, ?_, hsNtendsto⟩
+  intro N
+  simpa [zeros_of_partial] using hsNzero N
 
 /-- Active Step-1 approximation-frontier assumption for the endpoint route. -/
 variable (Step1ApproximationFrontier_assumption : Step1ApproximationFrontier)
