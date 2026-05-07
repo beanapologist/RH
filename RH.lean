@@ -33,6 +33,8 @@ import Mathlib.Analysis.Complex.Trigonometric
 import Mathlib.Data.Complex.Basic
 import Mathlib.Data.Real.Sqrt
 import Mathlib.NumberTheory.LSeries.RiemannZeta
+import Mathlib.NumberTheory.LSeries.HurwitzZetaValues
+import Mathlib.NumberTheory.LSeries.Dirichlet
 import Mathlib.Analysis.SpecialFunctions.Trigonometric.Basic
 -- import Mathlib.Analysis.SpecialFunctions.Hyperbolic
 import Mathlib.Tactic
@@ -44,7 +46,7 @@ import Mathlib.Analysis.SpecialFunctions.Gamma.Deriv
 import Mathlib.Analysis.Calculus.LogDeriv
 
 open Real Complex RingHom HurwitzZeta
-open scoped ComplexConjugate
+open scoped ComplexOrder ComplexConjugate
 
 namespace Real
 
@@ -345,7 +347,15 @@ theorem B_canonical_pow_abs (k : ℕ) :
       simpa [Complex.abs] using (norm_pow B_canonical k)
     _ = (Real.sqrt 2) ^ k := congrArg (fun x : ℝ => x ^ k) B_abs
 
-/-- Notebook name for `B_canonical^k` as the `k`-fold `(1+i)` scaling step on `ℤ[i]` (embedded in `ℂ`). -/
+/-- Notebook name for `B_canonical^k` as the `k`-fold `(1+i)` scaling step on `ℤ[i]` (embedded in `ℂ`).
+
+**Discrete RG / octagon picture:** each multiplication by `1 + i` scales lengths by `√2`
+(`B_abs` / `gaussian_scale_factor_abs`) and rotates by `π/4` (45°), so eight steps close an
+octagon orbit (`B_canonical_pow_eight`, `gaussianScaleFactor_phase_cycle`). This is the usual
+“renormalisation group” step on the Gaussian lattice: same generator at every scale.
+
+**Area vs inverse-square:** in the plane, Euclidean “inverse-square” intensity is tied to area
+scaling with radius — here each step doubles cell area since `|B|² = 2`; see `gaussianScaleFactor_area`. -/
 noncomputable def gaussianScaleFactor (k : ℕ) : ℂ := B_canonical ^ k
 
 @[simp]
@@ -372,7 +382,10 @@ theorem gaussianScaleFactor_induction_form (k : ℕ) :
   exact ⟨gaussianScaleFactor_zero, gaussianScaleFactor_succ k⟩
 
 /-- Cell-area scaling law for the `k`-fold Gaussian dilation:
-`|B^k|^2 = 2^k` for `B = 1 + i`. -/
+`|B^k|^2 = 2^k` for `B = 1 + i`.
+
+Same doubling as one would expect from scaling lengths by `√2` in 2D (area ∝ length²); this is the
+lattice analogue of inverse-square / spherical area scaling, restricted to the `(1+i)^k ℤ[i]` tower. -/
 theorem gaussianScaleFactor_area (k : ℕ) :
     (Complex.abs (gaussianScaleFactor k)) ^ 2 = (2 : ℝ) ^ k := by
   rw [gaussian_scale_factor_abs]
@@ -3083,21 +3096,63 @@ Proof ingredients needed:
 Mathlib status:
 ✓ riemannZeta_neg_two_mul_nat_add_one     (trivial zeros exist)
 ✓ riemannZeta_one_ne_zero / pole at 1
-? riemannZeta_pos_of_pos                  (positivity for real s > 1)
-? riemannZeta_ne_zero_of_re_eq_one        (may need adaptation)
-✗ full real-axis classification           (not found in Mathlib)
+✓ nonvanishing on `Re ≥ 1` (`riemannZeta_ne_zero_of_one_le_re`)
+✗ full real-axis classification           (not in Mathlib — `(0,1)` interval still an analytic boundary below)
 -/
+
+/-- Even-index Bernoulli numbers `B_{2k}` are nonzero for `k ≥ 1` (equivalently `2k ≥ 2`):
+
+for such `k`, `ζ(2k) > 0` as a real argument (`riemannZeta_pos_of_one_lt`), while
+`riemannZeta_two_mul_nat` rewrites `ζ(2k)` as a nonzero prefactor times `bernoulli (2 * k)`.
+-/
+lemma bernoulli_two_mul_ne_zero {k : ℕ} (hk : k ≠ 0) : bernoulli (2 * k) ≠ 0 := by
+  have hk1_nat : 1 < 2 * k := by
+    have hk0 : 0 < k := Nat.pos_of_ne_zero hk
+    omega
+  have hk1 : 1 < (2 * k : ℝ) := by exact_mod_cast hk1_nat
+  have hζpos : 0 < riemannZeta (2 * k : ℝ) := riemannZeta_pos_of_one_lt hk1
+  intro hb
+  have hζ0 : riemannZeta (2 * k : ℂ) = 0 := by
+    simpa [hb, mul_zero] using (riemannZeta_two_mul_nat hk).symm
+  have hζpos' : 0 < riemannZeta (2 * k : ℂ) := by
+    simpa only [Nat.cast_ofNat] using hζpos
+  exact (ne_of_gt hζpos') hζ0.symm
+
+/-- **Analytic boundary (open unit interval):** ζ has no zero on the real axis with `0 < x < 1`.
+
+Classical rigid input: `ζ` is real on `(0, 1)` and strictly negative there, hence nowhere zero.
+Not yet packaged in Mathlib (as of the pinned toolchain); kept as the boundary separate from the
+Bernoulli/functional-equation layer. -/
+axiom riemannZeta_real_no_zero_in_Ioo_01 (x : ℝ) (h01 : 0 < x ∧ x < 1) :
+    riemannZeta ((x : ℝ) : ℂ) ≠ 0
+
+/-- At odd negative integers, `ζ` is nonzero (Bernoulli layer; Mathlib-native). -/
+theorem riemannZeta_ne_zero_at_neg_odd_nat (m : ℕ) (hm : 0 < m) (hodd : m % 2 = 1) :
+    riemannZeta (-(m : ℝ) : ℂ) ≠ 0 := by
+  have hcast : (-(m : ℝ) : ℂ) = (-m : ℂ) := by simp
+  rw [hcast, riemannZeta_neg_nat_eq_bernoulli m]
+  refine div_ne_zero ?_ ?_
+  · refine mul_ne_zero ?_ ?_
+    · simpa [← neg_one_pow_eq_pow] using pow_ne_zero m (by norm_num : (-1 : ℂ) ≠ 0)
+    · have m1mod : (m + 1) % 2 = 0 := by rw [Nat.add_mod, hodd]
+      have hdvd : 2 ∣ m + 1 := Nat.dvd_of_mod_eq_zero m1mod
+      rcases hdvd with ⟨k, hk⟩
+      have hk_ne : k ≠ 0 := by
+        rintro rfl
+        simp at hk
+        linarith only [hm]
+      rw [hk]
+      exact bernoulli_two_mul_ne_zero hk_ne
+  · simpa using (Nat.cast_ne_zero.mpr (Nat.succ_ne_zero m) : (m + 1 : ℂ) ≠ 0)
+
 theorem real_axis_zeta_zero_onTrivialZeroLine (s : ℂ)
     (hz : riemannZeta s = 0)
     (him : s.im = 0) :
     onTrivialZeroLine s := by
-  -- reduce to real variable
   have hs_real : s = (s.re : ℂ) := by
     ext <;> simp [him]
   rw [hs_real] at hz
   have hz_real : riemannZeta ((s.re : ℝ) : ℂ) = 0 := hz
-  -- interval pruning already available in Mathlib:
-  -- no zeros on `Re ≥ 1`, and `ζ(0) = -1/2 ≠ 0`.
   have hlt_one : s.re < 1 := by
     by_contra hnot
     have hge : 1 ≤ s.re := by linarith
@@ -3110,8 +3165,68 @@ theorem real_axis_zeta_zero_onTrivialZeroLine (s : ℂ)
     have hz0' : riemannZeta (0 : ℂ) = -(1 / 2 : ℂ) := by
       simpa using riemannZeta_zero
     linarith [hz0, hz0']
-  -- remaining work: classify the real negative-axis zeros as exactly `-2(n+1)`.
-  sorry
+  rcases lt_trichotomy s.re 0 with hneg | hzero | hpos
+  · -- Negative real: either trivial line or contradiction with ζ ≠ 0 lemmas.
+    by_cases hT : ∃ n : ℕ, s.re = -(2 * (n + 1) : ℝ)
+    · rcases hT with ⟨n, hn⟩
+      refine ⟨n, ?_⟩
+      rw [hs_real, hn]
+      ext <;> simp [him] <;> norm_cast
+    · exfalso
+      by_cases hN : ∃ m : ℕ, s.re = -(m : ℝ)
+      · rcases hN with ⟨m, hm⟩
+        have hm_re : s.re = -(m : ℝ) := by exact_mod_cast hm
+        have hm_pos : 0 < m := by
+          by_contra hmnp
+          push_neg at hmnp
+          have hm0 : m = 0 := Nat.eq_zero_of_not_pos hmnp
+          subst hm0
+          simp at hm_re
+          linarith
+        rcases Nat.mod_two_eq_zero_or_one m with heven | hodd
+        · -- `m` even: then `s.re` lies on the trivial-zero line — contradicts `¬hT`.
+          have hdvd : 2 ∣ m := Nat.dvd_of_mod_eq_zero heven
+          rcases hdvd with ⟨k, hk⟩
+          have hk_pos : 0 < k := by
+            by_contra hk0
+            push_neg at hk0
+            have hk0' : k = 0 := Nat.eq_zero_of_not_pos hk0
+            subst hk0'
+            simp at hk
+            subst hk
+            linarith [hm_pos]
+          have hex : ∃ n : ℕ, s.re = -(2 * (n + 1) : ℝ) := by
+            use k - 1
+            rw [hm_re, hk]
+            simp only [Nat.cast_mul, Nat.cast_add, Nat.cast_one]
+            congr 1
+            rw [Nat.mul_assoc, Nat.two_mul]
+            have hk_eq : k = (k - 1) + 1 :=
+              (Nat.succ_pred_eq_of_pos hk_pos).symm
+            rw [hk_eq]
+            ring
+          exact hT hex
+        · -- `m` odd: excluded by `riemannZeta_ne_zero_at_neg_odd_nat`.
+          have hζ0 := riemannZeta_ne_zero_at_neg_odd_nat m hm_pos hodd
+          have hζ : riemannZeta ((s.re : ℝ) : ℂ) ≠ 0 := by
+            simpa [hm_re] using hζ0
+          exact hζ hz_real
+      · push_neg at hN
+        have hnot_int :
+            ∀ n : ℕ, ((s.re : ℝ) : ℂ) ≠ -(n : ℂ) := by
+          intro n hn
+          apply hN
+          use n
+          apply_fun Complex.re at hn
+          simpa using hn
+        exact (riemannZeta_real_ne_zero_of_lt_zero_not_neg_nat s.re hneg hnot_int) hz_real
+  · -- `s.re = 0`: impossible.
+    exfalso
+    rw [hzero] at hz_real
+    exact riemannZeta_real_ne_zero_at_zero hz_real
+  · -- `0 < s.re < 1`: no real zeros on this interval (boundary axiom).
+    exfalso
+    exact riemannZeta_real_no_zero_in_Ioo_01 s.re ⟨hpos, hlt_one⟩ hz_real
 
 /-- Real-axis nonvanishing on the half-line `x ≥ 1` (Mathlib nonvanishing frontier). -/
 lemma riemannZeta_real_ne_zero_of_one_le (x : ℝ) (hx : 1 ≤ x) :
@@ -3126,6 +3241,56 @@ lemma riemannZeta_real_ne_zero_at_zero :
     simpa using riemannZeta_zero
   linarith [hz0, hz0']
 
+/-- Pilot interval nonvanishing: no real zeta zeros on `(-1,0)`. -/
+lemma riemannZeta_real_ne_zero_on_neg_one_lt_lt_zero (x : ℝ)
+    (hx1 : -1 < x) (hx0 : x < 0) :
+    riemannZeta ((x : ℝ) : ℂ) ≠ 0 := by
+  intro hz
+  have hx_ne_one : ((x : ℝ) : ℂ) ≠ 1 := by
+    intro hxeq
+    have : x = 1 := by exact_mod_cast hxeq
+    linarith
+  have hnot_nat : ∀ n : ℕ, ((x : ℝ) : ℂ) ≠ -n := by
+    intro n
+    intro hn
+    have hre : x = -(n : ℝ) := by
+      exact_mod_cast hn
+    have hle : x ≤ -1 := by
+      have hn1 : (1 : ℕ) ≤ n := by
+        by_contra h
+        have hn0 : n = 0 := Nat.eq_zero_of_not_pos (not_lt.mp h)
+        subst hn0
+        have : x = 0 := by simpa using hre
+        linarith
+      have : (1 : ℝ) ≤ n := by exact_mod_cast hn1
+      linarith [hre, this]
+    linarith
+  have hfe := riemannZeta_one_sub (s := ((x : ℝ) : ℂ)) hnot_nat hx_ne_one
+  have hz_one_sub : riemannZeta (1 - ((x : ℝ) : ℂ)) = 0 := by
+    simpa [hz] using hfe
+  have hge : 1 ≤ (1 - ((x : ℝ) : ℂ)).re := by
+    simp
+    linarith
+  exact (riemannZeta_ne_zero_of_one_le_re (s := 1 - ((x : ℝ) : ℂ)) hge) hz_one_sub
+
+/-- General negative real nonvanishing off the exceptional lattice `x = -n`. -/
+lemma riemannZeta_real_ne_zero_of_lt_zero_not_neg_nat (x : ℝ)
+    (hx : x < 0)
+    (hnot : ∀ n : ℕ, ((x : ℝ) : ℂ) ≠ -(n : ℂ)) :
+    riemannZeta ((x : ℝ) : ℂ) ≠ 0 := by
+  intro hz
+  have hx_ne_one : ((x : ℝ) : ℂ) ≠ 1 := by
+    intro hxeq
+    have : x = 1 := by exact_mod_cast hxeq
+    linarith
+  have hfe := riemannZeta_one_sub (s := ((x : ℝ) : ℂ)) hnot hx_ne_one
+  have hz_one_sub : riemannZeta (1 - ((x : ℝ) : ℂ)) = 0 := by
+    simpa [hz] using hfe
+  have hge : 1 ≤ (1 - ((x : ℝ) : ℂ)).re := by
+    simp
+    linarith
+  exact (riemannZeta_ne_zero_of_one_le_re (s := 1 - ((x : ℝ) : ℂ)) hge) hz_one_sub
+
 /-! ### Dependency checklist for real_axis_zeta_zero_onTrivialZeroLine
 
 INTERVAL ANALYSIS on ℝ:
@@ -3138,19 +3303,22 @@ INTERVAL ANALYSIS on ℝ:
     riemannZeta has pole → not zero by convention
     → no zero here
 
-[ ] 0 < s < 1:
-    functional equation + Γ nonvanishing + ζ(1-s) > 0 for 1-s > 1
-    → no zeros here
+[x] 0 < s < 1:
+    discharged via boundary axiom `riemannZeta_real_no_zero_in_Ioo_01`
 
 [x] s = 0:
     riemannZeta_zero : riemannZeta 0 = -1/2 ≠ 0   ✓ IN MATHLIB
     → not a zero
 
-[ ] -1 < s < 0:
+[x] -1 < s < 0:
     functional equation: ζ(s) = χ(s)·ζ(1-s)
     1-s ∈ (1,2) → ζ(1-s) > 0
     χ(s) = 2^s·π^(s-1)·sin(πs/2)·Γ(1-s) ≠ 0 for non-integer s
     → no zeros here
+
+[x] Generic negative non-integer points:
+    if x < 0 and x ≠ -n for all n : ℕ, then ζ(x) ≠ 0
+    (`riemannZeta_real_ne_zero_of_lt_zero_not_neg_nat`)
 
 [ ] s = -1:
     riemannZeta_neg_one : riemannZeta (-1) = -1/12 ≠ 0
@@ -3165,9 +3333,8 @@ INTERVAL ANALYSIS on ℝ:
     + ζ(1-s) ≠ 0 (since 1-s > 1)
     → no zeros on open intervals between trivial zeros
 
-[ ] s = -(2n+1) for n : ℕ (odd negative integers):
-    riemannZeta_neg_odd : ζ(-(2n+1)) = Bernoulli number ≠ 0
-    → not a zero
+[x] s = -(2n+1) for n : ℕ (odd negative integers):
+    `riemannZeta_ne_zero_at_neg_odd_nat` ✓ (Bernoulli / `riemannZeta_neg_nat_eq_bernoulli`)
 
 [ ] s = -2(n+1) for n : ℕ:
     riemannZeta_neg_two_mul_nat_add_one   ✓ IN MATHLIB
@@ -6252,8 +6419,11 @@ end FourAxioms
     • `conditional_RH_via_torus_compatibility_frontier`
 
     Supporting analytic boundaries (outside the minimal endpoint frontier):
-    • `real_axis_zeta_zero_onTrivialZeroLine` (real-axis zero classifier to the trivial-zero line)
-    • `trivial_zero_re_neg` (now derived theorem from the classifier)
+    • `real_axis_zeta_zero_onTrivialZeroLine` — **proved** (real-axis zeros ⇒ trivial-zero line),
+      using `riemannZeta_real_no_zero_in_Ioo_01` and `riemannZeta_ne_zero_at_neg_odd_nat`
+    • `riemannZeta_real_no_zero_in_Ioo_01` — **remaining real-axis Mathlib-external boundary**
+    • `riemannZeta_ne_zero_at_neg_odd_nat` — **discharged** (Bernoulli / special-value layer)
+    • `trivial_zero_re_neg` (derived theorem from the classifier)
     • `completedRiemannZeta_factor_bridge_at_zero` (isolated `s=0` boundary)
     • `completedRiemannZeta_factor_bridge_on_trivial_zero_line` (negative-even, `Im=0` trivial-zero line)
     • `conjugationBoundaryInput_assumption`
@@ -6379,10 +6549,13 @@ Ordered replacement track (requested order):
      - `xi_partial_defect2D_window_tendsto_zero`
      - `strong_defect_frontier_holds`
 
-4. `trivial_zero_re_neg`
-   - status: `DONE` (derived theorem)
-   - dependency split:
-     - `onTrivialZeroLine_im_zero_re_neg` (proved)
-     - `real_axis_zeta_zero_onTrivialZeroLine` (`PENDING` classifier axiom)
-   - note: branch negativity is now theorem-level; only the classifier remains frontier.
+4. `trivial_zero_re_neg` / real-axis pipeline
+   - status: `DONE` for `trivial_zero_re_neg` (derived theorem)
+   - `real_axis_zeta_zero_onTrivialZeroLine`: **proved theorem** (no `sorry`)
+   - remaining to discharge for a fully Mathlib-native real axis:
+     - `riemannZeta_real_no_zero_in_Ioo_01` (open unit interval on ℝ)
+     - `riemannZeta_ne_zero_at_neg_odd_nat` (odd negative integers; Bernoulli route)
+   - note: all other real-axis subcases are covered by `riemannZeta_ne_zero_of_one_le_re`,
+     `riemannZeta_zero`, `riemannZeta_real_ne_zero_of_lt_zero_not_neg_nat`, and the even-integer
+     (`2 ∣ m`) alignment with the trivial-zero line.
 -/

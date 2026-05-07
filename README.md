@@ -67,8 +67,10 @@ The canonical source factor **B = 1 + i** connects to the unit-circle crossing l
 - **Strong-defect frontier (active split form):**
   - `strongDefectProfile_assumption`
   - `strongDefectClosure_assumption`
-- **Real-axis classifier frontier (single remaining stub):**
-  - `real_axis_zeta_zero_onTrivialZeroLine` (current theorem stub with dependency checklist)
+- **Real-axis classification:** `real_axis_zeta_zero_onTrivialZeroLine` is a **proved theorem** (no `sorry`).
+  Remaining analytic inputs bundled as explicit axioms:
+  - `riemannZeta_real_no_zero_in_Ioo_01` — no real zero of ζ on `(0,1)`
+  - `riemannZeta_ne_zero_at_neg_odd_nat` — ζ(-m) ≠ 0 for odd `m ≥ 1`
 - **Projected interfaces:** `xi_defect_profile_nonzero_off_critical`, `xi_partial_defect2D_window_tendsto_zero`
 - **Supporting boundaries:** `conjugationBoundaryInput_assumption`
 - **Projected interface:** `completedHurwitzZetaEven_zero_conj_of_ne_zero`
@@ -103,7 +105,9 @@ Recommended order (dependency-first), now tracked as a checklist:
 - [ ] `step1_phase_velocity_identity_assumption`
 - [ ] `strongDefectProfile_assumption`
 - [ ] `strongDefectClosure_assumption`
-- [ ] `real_axis_zeta_zero_onTrivialZeroLine`
+- [x] `real_axis_zeta_zero_onTrivialZeroLine` (proved; depends on one Mathlib-external analytic boundary below)
+- [ ] `riemannZeta_real_no_zero_in_Ioo_01` (still an axiom: not in Mathlib on the current pin)
+- [x] `riemannZeta_ne_zero_at_neg_odd_nat` (proved from `riemannZeta_neg_nat_eq_bernoulli` + even Bernoulli nonvanishing)
 - [ ] `xi_partial_defect2D_window_tendsto_zero` (projected interface from bundled input)
 - [ ] `xi_defect_profile_nonzero_off_critical` (projected interface from bundled input)
 - [x] `missingPrimeCore_cauchy_tail` (consumed into Step-1 frontier via bridge theorem)
