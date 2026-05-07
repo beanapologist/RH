@@ -13,7 +13,11 @@ The current development does not claim an unconditional machine-checked proof of
 - Routes through `conditional_RH_via_window_limits`, now expressed via `conditional_RH_via_torus_compatibility_frontier`
 - Uses the **torus-compatibility frontier** as the canonical top-level endpoint interface whose window-limit projection closes RH
 - Grounded in analytic theory: lattice-window zeros converge to strip limits, then phase-lock/rigidity closes on the critical line
-- Active boundary assumption: `Step1ApproximationFrontier_assumption`
+- Active Step-1 boundary assumptions:
+  - `step1_F_lattice_boundary_assumption`
+  - `step1_tail_control_assumption`
+  - `step1_velocity_transfer_assumption`
+  - `step1_phase_velocity_identity_assumption`
 - Derived interface: `zeta_zero_is_limit_of_window_zeros`
 
 **Unified torus-compatibility frontier (canonical top-level endpoint interface):**
@@ -31,7 +35,9 @@ The current development does not claim an unconditional machine-checked proof of
 **Alternative strong-defect route:** 
 - `conditional_RH_from_strong_defect_frontier` — Purely algebraic rigidity via defect factorization
 - Valid but more abstract; use if you prefer source/medium/sink narrative
-- Requires bundled input: `strongDefectBoundaryInput_assumption`
+- Requires split strong-defect inputs:
+  - `strongDefectProfile_assumption`
+  - `strongDefectClosure_assumption`
 - Projected interfaces: `xi_defect_profile_nonzero_off_critical`, `xi_partial_defect2D_window_tendsto_zero`
 
 ## Geometric Bridge
@@ -45,16 +51,24 @@ The canonical source factor **B = 1 + i** connects to the unit-circle crossing l
 
 ## Status
 
-**Formally Proved (no `sorry`):**
+**Formally Proved (core, build-clean):**
 - Geometric framework: factorization, magnitude balance, coherence symmetry, critical-line forced σ = 1/2
 - Cartesian/polar channel decomposition, prime-wise decomposition
 - Finite-window refinement identities and phase-velocity relations
 - Endpoint packaging and bridge data coherence
 - Unit-circle crossing locus characterization
 
-**Not Formalized (explicit boundary axioms):**
-- **Window-limit frontier (active Step-1 form):** `Step1ApproximationFrontier_assumption`
-- **Strong-defect frontier (active bundled form):** `strongDefectBoundaryInput_assumption`
+**Not Formalized (explicit boundary assumptions / stubs):**
+- **Window-limit frontier (active Step-1 split form):**
+  - `step1_F_lattice_boundary_assumption`
+  - `step1_tail_control_assumption`
+  - `step1_velocity_transfer_assumption`
+  - `step1_phase_velocity_identity_assumption`
+- **Strong-defect frontier (active split form):**
+  - `strongDefectProfile_assumption`
+  - `strongDefectClosure_assumption`
+- **Real-axis classifier frontier (single remaining stub):**
+  - `real_axis_zeta_zero_onTrivialZeroLine` (current theorem stub with dependency checklist)
 - **Projected interfaces:** `xi_defect_profile_nonzero_off_critical`, `xi_partial_defect2D_window_tendsto_zero`
 - **Supporting boundaries:** `conjugationBoundaryInput_assumption`
 - **Projected interface:** `completedHurwitzZetaEven_zero_conj_of_ne_zero`
@@ -83,8 +97,13 @@ Execution status notes:
 
 Recommended order (dependency-first), now tracked as a checklist:
 
-- [ ] `Step1ApproximationFrontier_assumption` (prove Step-1 approximation frontier)
-- [ ] `strongDefectBoundaryInput_assumption` (prove bundled strong-defect boundary input)
+- [ ] `step1_F_lattice_boundary_assumption`
+- [ ] `step1_tail_control_assumption`
+- [ ] `step1_velocity_transfer_assumption`
+- [ ] `step1_phase_velocity_identity_assumption`
+- [ ] `strongDefectProfile_assumption`
+- [ ] `strongDefectClosure_assumption`
+- [ ] `real_axis_zeta_zero_onTrivialZeroLine`
 - [ ] `xi_partial_defect2D_window_tendsto_zero` (projected interface from bundled input)
 - [ ] `xi_defect_profile_nonzero_off_critical` (projected interface from bundled input)
 - [x] `missingPrimeCore_cauchy_tail` (consumed into Step-1 frontier via bridge theorem)
@@ -181,7 +200,7 @@ Recommended order (dependency-first), now tracked as a checklist:
 
 ## Files
 
-- `RH.lean` — Main formalization (3626 lines)
+- `RH.lean` — Main formalization
 - `lakefile.lean` — Lake build configuration
 - `lean-toolchain` — Lean version specification
 - `.github/workflows/lean-ci.yml` — CI/CD workflow

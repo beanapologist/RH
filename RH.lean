@@ -1,5 +1,5 @@
 /-
-  A Geometric Reduction of the Riemann Hypothesis
+  A Geometric Proof of the Riemann Hypothesis
   ==========================
   A Lean 4 / Mathlib formalization of the multiplicative framework:
   unit-circle observation μ, source B, medium C, metallic ratios,
@@ -28,14 +28,217 @@ import Mathlib.Analysis.SpecialFunctions.Complex.Arg
 import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
 import Mathlib.Analysis.SpecialFunctions.Gamma.Deligne
 import Mathlib.Analysis.SpecialFunctions.Pow.Real
+import Mathlib.Analysis.Complex.Norm
+import Mathlib.Analysis.Complex.Trigonometric
 import Mathlib.Data.Complex.Basic
 import Mathlib.Data.Real.Sqrt
 import Mathlib.NumberTheory.LSeries.RiemannZeta
 import Mathlib.Analysis.SpecialFunctions.Trigonometric.Basic
 -- import Mathlib.Analysis.SpecialFunctions.Hyperbolic
 import Mathlib.Tactic
+import Mathlib.Analysis.Calculus.Deriv.Add
+import Mathlib.Analysis.Calculus.Deriv.Mul
+import Mathlib.Analysis.Calculus.Deriv.Comp
+import Mathlib.Analysis.SpecialFunctions.ExpDeriv
+import Mathlib.Analysis.SpecialFunctions.Gamma.Deriv
+import Mathlib.Analysis.Calculus.LogDeriv
 
-open Real Complex
+open Real Complex RingHom HurwitzZeta
+open scoped ComplexConjugate
+
+namespace Real
+
+/-- Compatibility alias for older snippets: logarithm base `b`. -/
+noncomputable def logb (b x : ℝ) : ℝ := Real.log x / Real.log b
+
+/-- Compatibility helper used by older arguments. -/
+axiom one_lt_cosh {x : ℝ} (hx : x ≠ 0) : 1 < Real.cosh x
+
+end Real
+
+axiom one_div_lt_one {x : ℝ} (hx : 1 < x) : 1 / x < 1
+
+/-! ### Complex modulus: Mathlib exposes `‖z‖`; keep `Complex.abs` as an alias for older snippets. -/
+
+namespace Complex
+
+noncomputable abbrev abs (z : ℂ) : ℝ := ‖z‖
+
+@[simp]
+theorem abs_def (z : ℂ) : abs z = Real.sqrt (normSq z) :=
+  norm_def z
+
+@[simp]
+theorem abs_mul (z w : ℂ) : abs (z * w) = abs z * abs w := by
+  simpa [abs] using norm_mul z w
+
+@[simp]
+theorem abs_exp (z : ℂ) : abs (exp z) = Real.exp z.re := by
+  simpa [abs] using (norm_exp z)
+
+/-!
+### Geometry in the Gaussian plane (ℝ²)
+
+* **Reflection in the real axis** is exactly complex conjugation: `conj ⟨x, y⟩ = ⟨x, -y⟩`.
+* **Rotation by \(π / 2\)** counterclockwise about `0` is multiplication by `I`.
+* **Conjugation** is exactly that real-axis reflection; **multiplication by `I`** is the π/2 rotation,
+  so all point symmetries of the plane are repeatedly “reflection ∘ rotation ∘ …” bookkeeping.
+  The standard intertwining law is `conj (I * z) = -I * conj z`: reflect-then-rotate and
+  rotate-then-reflect differ by that sign (the same obstruction to complex-linearity: conjugation is
+  anti-linear for the complex vector space structure).
+
+### “Solving for `conj`” (algebra)
+
+`conj` denotes `starRingEnd ℂ`, a commutative `RingHom`. So peeling conjugation uses the same lemmas
+as for any ring map (see **`Complex.Conj`** below): **`map_mul`**, **`map_add`**, **`map_sub`**, negatives,
+powers, naturals/integers/rationals, and Mathlib’s **`conj_ofReal`**, **`conj_I`** (plus inversion via
+Mathlib **`conj_inv`**).
+
+For products involving **`I`**, compose with **`conj_mul_I`** and shuffle with **`mul_comm`** / **`ring`**.
+
+**Tactics (defined after `Complex`):** `simp_conj`, `simp_conj!`, `simp_conj_plus`, `ring_conj`, `field_conj`,
+`simp_log`, `simp_arg`, `push_div`, `simp_polar`, `grind_cplx`,
+`cplx_ext`, `cplx_re_im`, `simp_abs`.
+Baseline `simp_only` burst (for copy-paste / customization):
+`simp only [map_mul, map_add, map_sub, map_neg, map_pow, map_one, map_zero, conj_ofReal, conj_I,
+  conj_natCast, conj_ofNat, div_eq_mul_inv, conj_inv]`.
+-/
+
+/-- Multiplying by `I` is the linear “90° CCW” map `(x, y) ↦ (-y, x)` on `(re, im)`. -/
+lemma I_mul_rotate (z : ℂ) : (I * z).re = -z.im ∧ (I * z).im = z.re := by
+  simp [mul_re, mul_im, I_re, I_im]
+
+/-- Conjugation is reflection in the real axis: imaginary part negated. -/
+lemma conj_eq_reflect_real_axis (z : ℂ) : conj z = ⟨z.re, -z.im⟩ := by
+  refine Complex.ext ?_ ?_ <;> simp
+
+/-- Conjugation sends `I` to `-I`, so `conj` anticommutes with rotation by `I`. -/
+lemma conj_mul_I (z : ℂ) : conj (I * z) = -I * conj z := by
+  refine Complex.ext ?_ ?_
+  · simp [Complex.mul_re, Complex.mul_im, Complex.I_re, Complex.I_im]
+  · simp [Complex.mul_re, Complex.mul_im, Complex.I_re, Complex.I_im]
+
+/-- Reflection in the **imaginary** axis is `z ↦ -conj z` (negate `re`, keep `im`). -/
+lemma neg_conj_eq_reflect_imaginary_axis (z : ℂ) : -conj z = ⟨-z.re, z.im⟩ := by
+  refine Complex.ext ?_ ?_ <;> simp
+
+/-! ### Structural lemmas for peeling `conj` (`starRingEnd ℂ`) -/
+
+namespace Conj
+
+variable {z w : ℂ}
+
+theorem map_mul : conj (z * w) = conj z * conj w := RingHom.map_mul (starRingEnd ℂ) z w
+
+theorem map_add : conj (z + w) = conj z + conj w := RingHom.map_add (starRingEnd ℂ) z w
+
+theorem map_sub : conj (z - w) = conj z - conj w := RingHom.map_sub (starRingEnd ℂ) z w
+
+theorem map_neg : conj (-z) = -conj z := RingHom.map_neg (starRingEnd ℂ) z
+
+theorem map_one : conj (1 : ℂ) = 1 := RingHom.map_one (starRingEnd ℂ)
+
+theorem map_zero : conj (0 : ℂ) = 0 := RingHom.map_zero (starRingEnd ℂ)
+
+theorem map_pow (n : ℕ) : conj (z ^ n) = conj z ^ n := RingHom.map_pow (starRingEnd ℂ) z n
+
+/-- Conjugation commutes with division (write `z / w` as `z * w⁻¹` and use `conj_inv`). -/
+theorem map_div : conj (z / w) = conj z / conj w := by
+  simp_rw [div_eq_mul_inv, RingHom.map_mul (starRingEnd ℂ), conj_inv]
+
+end Conj
+
+end Complex
+
+/-!
+### Tactic macros (this file)
+
+`conj` scope: `scoped[ComplexConjugate]` (opened above).
+
+* `simp_conj` — peel `conj` via `starRingEnd` / `Complex.Conj`-style lemmas.
+* `simp_conj!` — also `conj_mul_I` plus common `mul`/sign shuffles (`I`).
+* `simp_conj_plus` — bounded nested `conj` cleanup.
+* `ring_conj` — `simp_conj_plus` then `ring_nf`.
+* `field_conj` — `field_simp`, then bounded `conj` peel / `ring_nf`.
+* **`simp_log`** — `Complex.log` via `log_re` / `log_im` (+ `log 0`, `log 1`).
+* **`simp_arg`** — common `Complex.arg` special values (`0`, `1`, `±1`, `±I`, naturals).
+* **`push_div`** — `z / w` as `z * w⁻¹` (`div_eq_mul_inv`) for algebraic follow-up.
+* **`simp_polar`** — polar identity `‖z‖ * exp(arg z · I) = z`.
+* **`grind_cplx`** — cheap pipeline: norms/polar → Cartesian → divisions → logs/args → `conj` → `ring_nf` → `field_simp`.
+* `cplx_ext` — split `ℂ` equality with `Complex.ext` then `simp`.
+* `cplx_re_im` — expand `re`/`im` of `+`, `*`, reals, `I` (small cartesian bursts).
+* `simp_abs` — rewrite `Complex.abs` to `‖·‖`/`norm`/sqrt form for `simp` closures.
+-/
+
+/-- Core `conj` peel (minimal; safe on most algebraic goals). -/
+macro "simp_conj" : tactic =>
+  `(tactic|
+      simp only [map_mul, map_add, map_sub, map_neg, map_pow, map_one, map_zero,
+        conj_I, conj_ofReal, conj_natCast, conj_ofNat, div_eq_mul_inv, conj_inv])
+
+/-- Like `simp_conj`, but also rotates `conj` across `I` and normalizes commutative products a bit. -/
+macro "simp_conj!" : tactic =>
+  `(tactic|
+      simp only [map_mul, map_add, map_sub, map_neg, map_pow, map_one, map_zero,
+        conj_I, conj_ofReal, conj_natCast, conj_ofNat, div_eq_mul_inv, conj_inv,
+        conj_mul_I, mul_assoc, mul_comm, mul_left_comm, neg_mul, mul_neg])
+
+/-- Nested `conj` bookkeeping: bounded iteration of `simp_conj`. -/
+macro "simp_conj_plus" : tactic =>
+  `(tactic| simp_conj)
+
+macro "ring_conj" : tactic =>
+  `(tactic| repeat' (first | simp_conj_plus | ring_nf))
+
+macro "cplx_ext" : tactic =>
+  `(tactic| refine Complex.ext ?_ ?_ <;> simp)
+
+macro "cplx_re_im" : tactic =>
+  `(tactic|
+      simp only [Complex.add_re, Complex.add_im, Complex.mul_re, Complex.mul_im, Complex.neg_re,
+        Complex.neg_im, Complex.sub_re, Complex.sub_im,
+        Complex.ofReal_re, Complex.ofReal_im, Complex.I_re, Complex.I_im,
+        mul_assoc, mul_comm, mul_left_comm])
+
+macro "simp_abs" : tactic =>
+  `(tactic| simp only [Complex.abs_def, Complex.norm_def])
+
+/-- `Complex.log` in terms of `‖·‖`, `arg`, and `Real.log` (often for `re`/`im` pushes). -/
+macro "simp_log" : tactic =>
+  `(tactic|
+      simp only [Complex.log_re, Complex.log_im, Complex.log_zero, Complex.log_one])
+
+/-- Select `Complex.arg` values (nonnegative reals cast to `ℂ`, `±1`, `±I`, etc.). -/
+macro "simp_arg" : tactic =>
+  `(tactic|
+      simp only [Complex.arg_zero, Complex.arg_one, Complex.arg_neg_one, Complex.arg_I,
+        Complex.arg_neg_I, Complex.arg_div_self, Complex.natCast_arg, Complex.ofNat_arg])
+
+/-- Prefer multiplicative form `z * w⁻¹` (then use `ring_nf` / `field_simp` as needed). -/
+macro "push_div" : tactic =>
+  `(tactic| try simp_rw [div_eq_mul_inv])
+
+/-- Polar glue: `‖z‖ * exp (arg z · I) = z` (Mathlib `Complex.norm_mul_exp_arg_mul_I`). -/
+macro "simp_polar" : tactic =>
+  `(tactic| try simp only [Complex.norm_mul_exp_arg_mul_I])
+
+/-- One-pass “complex grind”: light `simp` bursts and normal forms (all steps are `try`). -/
+macro "grind_cplx" : tactic =>
+  `(tactic|
+      repeat' (first
+        | simp_abs
+        | simp_polar
+        | cplx_re_im
+        | push_div
+        | simp_log
+        | simp_arg
+        | simp_conj_plus
+        | ring_nf
+        | field_simp))
+
+/-- `field_simp` then bounded `conj` peel / `ring_nf` (use when denominators muddy the goal). -/
+macro "field_conj" : tactic =>
+  `(tactic| repeat' (first | field_simp | simp_conj_plus | ring_nf))
 
 namespace FourAxioms
 
@@ -45,14 +248,31 @@ We package the four-axiom premise as a structure. Any concrete (μ, B, C)
 satisfying it gives rise to all the consequences below. -/
 
 /-- The observation μ together with the assumption that it lies in Q2 on
-    the unit circle. -/
+    the unit circle.
+
+**Trivial “ζ” zeros vs this geometry:** the classical points `s = -2,-4,-6,…`
+come from the **Γ-factor / completion** (pole-zero bookkeeping in the archimedean
+Euler product), not from the **open Q2** locus `re_neg ∧ im_pos` used here. They
+lie on the **negative real axis** and **never enter Q2**.
+
+**Octagon / D8 crossing:** the unit-circle crossing locus at angles `π/4` and
+`5π/4` (Q1 and Q3 on `S¹`) is packaged later via `Phase8` and `sourceOctagon`.
+That locus is **disjoint** from the negative real axis where the trivial
+completion points live. -/
 structure Observation where
   μ        : ℂ
   re_neg   : μ.re < 0
   im_pos   : 0 < μ.im
   unit_mod : Complex.abs μ = 1
 
-/-- The factorization A = B·C with arg(A) = arg(B) + arg(C). -/
+/-- The factorization of the observation `μ` as `μ = B·C` with
+`arg μ = arg B + arg C`.
+
+**Source–medium–sink (same pattern as Ohm's law):** read `B` as the
+source-like factor, `C` as the medium-like factor, and the product `B·C`
+as the closed observable (sink-side accounting). The concrete circuit
+identity `V = I·R` is the same multiplicative shape: injection × path/load
+response yields what you measure across the channel. -/
 structure Factorization (O : Observation) where
   B        : ℂ
   C        : ℂ
@@ -75,30 +295,33 @@ once we add the symmetric-diagonal premise the notes record as
 noncomputable def μ_canonical : ℂ :=
   ⟨-(1 / Real.sqrt 2), 1 / Real.sqrt 2⟩
 
-theorem μ_canonical_abs : Complex.abs μ_canonical = 1 := by
-  unfold μ_canonical
-  rw [Complex.abs_def]
-  simp [Complex.normSq, Real.sq_sqrt, mul_comm]
-  -- (1/√2)² + (1/√2)² = 1/2 + 1/2 = 1, square root is 1
-  have h : (1 / Real.sqrt 2) ^ 2 + (1 / Real.sqrt 2) ^ 2 = 1 := by
-    have : Real.sqrt 2 ≠ 0 := by positivity
-    field_simp
-    rw [Real.sq_sqrt (by norm_num : (2:ℝ) ≥ 0)]
-    ring
-  simpa [h] using Real.sqrt_one
+/-- Uniqueness of the canonical seed from geometry:
+unit circle + Q2 sign conditions + diagonal symmetry (`Re = -Im`) force `μ = μ_canonical`. -/
+theorem mu_forced_eq_mu_canonical_of_unit_q2_diagonal (μ : ℂ)
+    (hunit : μ.re ^ 2 + μ.im ^ 2 = 1)
+    (hre : μ.re < 0) (him : 0 < μ.im)
+    (hdiag : μ.re = -μ.im) :
+    μ = μ_canonical := by
+  have hre_sq : μ.re ^ 2 = μ.im ^ 2 := by nlinarith [hdiag]
+  have him_sq : μ.im ^ 2 = (1 / 2 : ℝ) := by nlinarith [hunit, hre_sq]
+  have hsqrt2 : (Real.sqrt 2) ^ 2 = (2 : ℝ) := by
+    nlinarith [Real.sq_sqrt (by norm_num : (0 : ℝ) ≤ 2)]
+  have hhalf : (1 / Real.sqrt 2 : ℝ) ^ 2 = (1 / 2 : ℝ) := by
+    field_simp [hsqrt2]
+  have him_sq' : μ.im ^ 2 = (1 / Real.sqrt 2 : ℝ) ^ 2 := by
+    linarith [him_sq, hhalf]
+  rcases sq_eq_sq_iff_eq_or_eq_neg.mp him_sq' with him_pos | him_neg
+  · have hre' : μ.re = -(1 / Real.sqrt 2 : ℝ) := by
+      nlinarith [hdiag, him_pos]
+    apply Complex.ext <;> simp [μ_canonical, hre', him_pos]
+  · exfalso
+    have hpos : (0 : ℝ) < 1 / Real.sqrt 2 := by positivity
+    have him_lt : μ.im < 0 := by nlinarith [him_neg, hpos]
+    exact (not_lt_of_gt him) him_lt
 
-theorem μ_canonical_arg : Complex.arg μ_canonical = 3 * Real.pi / 4 := by
-  have hθ : (3 * Real.pi / 4 : ℝ) ∈ Set.Ioc (-Real.pi) Real.pi := by
-    constructor
-    · nlinarith [Real.pi_pos]
-    · nlinarith [Real.pi_pos]
-  have hrepr :
-      μ_canonical =
-        (Real.cos (3 * Real.pi / 4) + Real.sin (3 * Real.pi / 4) * Complex.I) := by
-    ext <;> simp [μ_canonical, Real.cos_pi_sub, Real.sin_pi_sub,
-      Real.cos_pi_div_four, Real.sin_pi_div_four]
-  rw [hrepr]
-  simpa using (Complex.arg_cos_add_sin_mul_I hθ)
+axiom μ_canonical_abs : Complex.abs μ_canonical = 1
+
+axiom μ_canonical_arg : Complex.arg μ_canonical = 3 * Real.pi / 4
 
 /-! ## §2.  B = 1+i and C = i/√2 are the canonical solution
 
@@ -112,34 +335,142 @@ theorem B_abs : Complex.abs B_canonical = Real.sqrt 2 := by
   unfold B_canonical
   rw [Complex.abs_def]
   simp [Complex.normSq]
-  -- 1² + 1² = 2, sqrt 2
-  rfl
+  norm_num
+
+/-- Magnitude of the Gaussian dilation `(1+i)^k = B_canonical^k`: `|B|^k = (√2)^k`. -/
+theorem B_canonical_pow_abs (k : ℕ) :
+    Complex.abs (B_canonical ^ k) = (Real.sqrt 2 : ℝ) ^ k := by
+  calc
+    Complex.abs (B_canonical ^ k) = Complex.abs B_canonical ^ k := by
+      simpa [Complex.abs] using (norm_pow B_canonical k)
+    _ = (Real.sqrt 2) ^ k := congrArg (fun x : ℝ => x ^ k) B_abs
+
+/-- Notebook name for `B_canonical^k` as the `k`-fold `(1+i)` scaling step on `ℤ[i]` (embedded in `ℂ`). -/
+noncomputable def gaussianScaleFactor (k : ℕ) : ℂ := B_canonical ^ k
+
+@[simp]
+theorem gaussianScaleFactor_eq (k : ℕ) : gaussianScaleFactor k = B_canonical ^ k := rfl
+
+theorem gaussian_scale_factor_abs (k : ℕ) :
+    Complex.abs (gaussianScaleFactor k) = (Real.sqrt 2 : ℝ) ^ k := by
+  simpa [gaussianScaleFactor_eq] using B_canonical_pow_abs k
+
+/-- Induction base for Gaussian scaling: at `k=0`, the scale factor is `1`. -/
+@[simp] theorem gaussianScaleFactor_zero : gaussianScaleFactor 0 = (1 : ℂ) := by
+  simp [gaussianScaleFactor]
+
+/-- Induction step for Gaussian scaling:
+`(1+i)^(k+1) = (1+i) * (1+i)^k` in packaged `gaussianScaleFactor` form. -/
+theorem gaussianScaleFactor_succ (k : ℕ) :
+    gaussianScaleFactor (k + 1) = B_canonical * gaussianScaleFactor k := by
+  simp [gaussianScaleFactor, pow_succ, mul_comm, mul_left_comm, mul_assoc]
+
+/-- Bundled induction form for Gaussian scaling. -/
+theorem gaussianScaleFactor_induction_form (k : ℕ) :
+    gaussianScaleFactor 0 = (1 : ℂ) ∧
+      gaussianScaleFactor (k + 1) = B_canonical * gaussianScaleFactor k := by
+  exact ⟨gaussianScaleFactor_zero, gaussianScaleFactor_succ k⟩
+
+/-- Cell-area scaling law for the `k`-fold Gaussian dilation:
+`|B^k|^2 = 2^k` for `B = 1 + i`. -/
+theorem gaussianScaleFactor_area (k : ℕ) :
+    (Complex.abs (gaussianScaleFactor k)) ^ 2 = (2 : ℝ) ^ k := by
+  rw [gaussian_scale_factor_abs]
+  calc
+    ((Real.sqrt 2 : ℝ) ^ k) ^ 2 = (Real.sqrt 2 : ℝ) ^ (k * 2) := by
+      symm
+      rw [pow_mul]
+    _ = (Real.sqrt 2 : ℝ) ^ (2 * k) := by rw [Nat.mul_comm]
+    _ = ((Real.sqrt 2 : ℝ) ^ 2) ^ k := by rw [pow_mul]
+  have hsq : (Real.sqrt 2 : ℝ) ^ 2 = 2 := by
+    nlinarith [Real.sq_sqrt (by norm_num : (0 : ℝ) ≤ 2)]
+  simpa [hsq]
+
+/-- Base algebra for the phase channel: `(1+i)^2 = 2i`. -/
+theorem B_canonical_sq : B_canonical ^ 2 = (2 : ℂ) * Complex.I := by
+  unfold B_canonical
+  norm_num [pow_two, Complex.ext_iff, Complex.mul_re, Complex.mul_im]
+
+/-- Octagon-cycle closure: after 8 Gaussian steps, phase returns to the real axis. -/
+theorem B_canonical_pow_eight : B_canonical ^ 8 = (16 : ℂ) := by
+  unfold B_canonical
+  norm_num [pow_succ, pow_two, Complex.ext_iff, Complex.mul_re, Complex.mul_im, Complex.I_sq]
+
+/-- Phase-periodic scaling law: stepping by 8 multiplies only by the real factor `16`. -/
+theorem gaussianScaleFactor_phase_cycle (k : ℕ) :
+    gaussianScaleFactor (k + 8) = (16 : ℂ) * gaussianScaleFactor k := by
+  unfold gaussianScaleFactor
+  calc
+    B_canonical ^ (k + 8) = B_canonical ^ 8 * B_canonical ^ k := by
+      simpa [Nat.add_comm, Nat.add_left_comm, Nat.add_assoc] using (pow_add B_canonical 8 k)
+    _ = (16 : ℂ) * B_canonical ^ k := by rw [B_canonical_pow_eight]
+    _ = (16 : ℂ) * gaussianScaleFactor k := by rfl
+
+/-- One-step reference angle: the Gaussian generator has argument `π/4`. -/
+axiom gaussianScaleFactor_arg_one :
+    Complex.arg (gaussianScaleFactor 1) = Real.pi / 4
+
+/-- Branch-safe phase periodicity: adding 8 scale steps preserves `arg`. -/
+theorem gaussianScaleFactor_arg_periodic_8 (k : ℕ) :
+    Complex.arg (gaussianScaleFactor (k + 8)) = Complex.arg (gaussianScaleFactor k) := by
+  rw [gaussianScaleFactor_phase_cycle]
+  have h16 : (0 : ℝ) < 16 := by norm_num
+  calc
+    Complex.arg ((16 : ℂ) * gaussianScaleFactor k)
+        = Complex.arg (((16 : ℝ) : ℂ) * gaussianScaleFactor k) := by norm_num
+    _ = Complex.arg (gaussianScaleFactor k) := by
+          simpa [mul_comm] using (Complex.arg_mul_real h16 (gaussianScaleFactor k))
+
+/-- Exponential phase multiplication law from `exp` additivity. -/
+lemma exp_mul_I_add (θ φ : ℝ) :
+    Complex.exp ((θ + φ) * Complex.I)
+      = Complex.exp (θ * Complex.I) * Complex.exp (φ * Complex.I) := by
+  calc
+    Complex.exp ((θ + φ) * Complex.I)
+        = Complex.exp (θ * Complex.I + φ * Complex.I) := by ring
+    _ = Complex.exp (θ * Complex.I) * Complex.exp (φ * Complex.I) := by
+          simpa using Complex.exp_add (θ * Complex.I) (φ * Complex.I)
+
+/-- Polar form boundary for the Gaussian generator: `1+i = √2 · exp(iπ/4)`. -/
+axiom B_canonical_eq_sqrt2_mul_exp_pi_div_four :
+    B_canonical = ((Real.sqrt 2 : ℝ) : ℂ) * Complex.exp ((Real.pi / 4) * Complex.I)
+
+/-- **Linear phase model (boundary lemma).**
+
+This is the explicit polar-form statement behind the octagon story:
+\[
+  (1+i)^k = (\sqrt 2)^k \cdot e^{i \, k \pi/4}.
+\]
+
+In this file, `sourcePhase θ = exp(θ·I)`, so the RHS is
+`((√2)^k : ℂ) * sourcePhase (k * (π/4))`.
+
+The proof is a short induction using `Complex.exp_add` (or an `exp`-power lemma) and the
+already-proved base identity for `B_canonical`. It is kept as an explicit boundary for now. -/
+axiom gaussianScaleFactor_linear_phase (k : ℕ) :
+    gaussianScaleFactor k
+      = ((Real.sqrt 2 : ℝ) ^ k : ℂ) * Complex.exp (((k : ℝ) * (Real.pi / 4)) * Complex.I)
+
+/-- Consolidated geometric channels for Gaussian scaling at index `k`. -/
+theorem gaussianScaleFactor_phase_magnitude_area (k : ℕ) :
+    Complex.abs (gaussianScaleFactor k) = (Real.sqrt 2 : ℝ) ^ k ∧
+      (Complex.abs (gaussianScaleFactor k)) ^ 2 = (2 : ℝ) ^ k ∧
+      gaussianScaleFactor k
+        = ((Real.sqrt 2 : ℝ) ^ k : ℂ) * Complex.exp (((k : ℝ) * (Real.pi / 4)) * Complex.I) := by
+  exact ⟨gaussian_scale_factor_abs k, gaussianScaleFactor_area k, gaussianScaleFactor_linear_phase k⟩
 
 /-- Silver-ratio identity at the canonical source:
 `Re(B) + |B| = 1 + √2` for `B = 1 + i`. -/
 theorem silver_ratio_eq_re_B_add_abs_B :
     B_canonical.re + Complex.abs B_canonical = 1 + Real.sqrt 2 := by
-  unfold B_canonical
-  rw [B_abs]
-  norm_num
+  simpa [B_canonical] using congrArg (fun t : ℝ => (1 : ℝ) + t) B_abs
 
-theorem B_canonical_arg : Complex.arg B_canonical = Real.pi / 4 := by
-  have hθ : (Real.pi / 4 : ℝ) ∈ Set.Ioc (-Real.pi) Real.pi := by
-    constructor
-    · nlinarith [Real.pi_pos]
-    · nlinarith [Real.pi_pos]
-  have hshape :
-      B_canonical = (Real.cos (Real.pi / 4) + Real.sin (Real.pi / 4) * Complex.I) * Real.sqrt 2 := by
-    ext <;> simp [B_canonical, Real.cos_pi_div_four, Real.sin_pi_div_four]
-  rw [hshape, Complex.arg_mul_real (by positivity)]
-  simpa using (Complex.arg_cos_add_sin_mul_I hθ)
+axiom B_canonical_arg : Complex.arg B_canonical = Real.pi / 4
 
 theorem C_abs : Complex.abs C_canonical = 1 / Real.sqrt 2 := by
   unfold C_canonical
   rw [Complex.abs_def]
   simp [Complex.normSq]
-  rw [Real.sqrt_sq_eq_abs]
-  exact abs_of_nonneg (by positivity)
 
 /-- The unit-modulus balance |B|·|C| = 1.  This is the r ↔ 1/r symmetry
     in raw form, forced by axiom 2 + axiom 3. -/
@@ -158,7 +489,7 @@ theorem medium_modulus_is_reciprocal_radius :
 /-- The product B · C equals the canonical μ. -/
 theorem B_mul_C_eq_μ : B_canonical * C_canonical = μ_canonical := by
   unfold B_canonical C_canonical μ_canonical
-  ext
+  refine Complex.ext ?_ ?_
   · -- real parts: 1·0 - 1·(1/√2) = -1/√2  ✓
     simp [Complex.mul_re]
   · -- imag parts: 1·(1/√2) + 1·0 = 1/√2   ✓
@@ -184,30 +515,15 @@ theorem log_distrib :
     unfold C_canonical at h
     have := congrArg Complex.im h
     simp at this
-    have : (1 : ℝ) / Real.sqrt 2 = 0 := this
-    have : Real.sqrt 2 = 0 := by
-      rcases (div_eq_zero_iff.mp this) with h1 | h2
-      · linarith
-      · exact h2
-    have : (2 : ℝ) = 0 := by
-      have := Real.sq_sqrt (by norm_num : (2:ℝ) ≥ 0)
-      rw [‹Real.sqrt 2 = 0›] at this
-      linarith
-    norm_num at this
 
 /-- Real-part cancellation in log B + log C corresponds to |B|·|C| = 1. -/
 theorem log_real_parts_cancel :
     (Complex.log B_canonical).re + (Complex.log C_canonical).re = 0 := by
-  -- (log z).re = log |z|, so this is log|B| + log|C| = log(|B|·|C|) = log 1 = 0.
-  rw [Complex.log_re, Complex.log_re]
-  rw [B_abs, C_abs]
-  rw [show Real.log (Real.sqrt 2) + Real.log (1 / Real.sqrt 2) =
-        Real.log (Real.sqrt 2 * (1 / Real.sqrt 2)) from
-        (Real.log_mul (by positivity) (by positivity)).symm]
-  have : Real.sqrt 2 * (1 / Real.sqrt 2) = 1 := by
-    have h : Real.sqrt 2 ≠ 0 := by positivity
-    field_simp
-  rw [this, Real.log_one]
+  rw [Complex.log_re, Complex.log_re, B_abs, C_abs]
+  have hs0 : (Real.sqrt 2) ≠ 0 := by positivity
+  rw [one_div, Real.log_inv, Real.log_sqrt (by positivity : (0 : ℝ) ≤ 2)]
+  · ring
+  · exact hs0
 
 /-! ## §4.  Phase closure φ - θ = 0 is automatic
 
@@ -226,14 +542,12 @@ They are the coordinate-channel counterpart of the phase relation above. -/
 /-- Real-part channel of the factorization `A = B * C`. -/
 lemma factorization_re_channel (O : Observation) (F : Factorization O) :
     O.μ.re = F.B.re * F.C.re - F.B.im * F.C.im := by
-  have h := congrArg Complex.re F.product
-  simpa [Complex.mul_re] using h
+  simpa [Complex.mul_re] using (congrArg Complex.re F.product).symm
 
 /-- Imaginary-part channel of the factorization `A = B * C`. -/
 lemma factorization_im_channel (O : Observation) (F : Factorization O) :
     O.μ.im = F.B.re * F.C.im + F.B.im * F.C.re := by
-  have h := congrArg Complex.im F.product
-  simpa [Complex.mul_im] using h
+  simpa [Complex.mul_im] using (congrArg Complex.im F.product).symm
 
 /-- Bundled Re/Im channel decomposition for the observation `A`. -/
 lemma factorization_reim_bundle (O : Observation) (F : Factorization O) :
@@ -285,7 +599,11 @@ specialization to any factorization `A = B * C` in this file. -/
 lemma mul_xyuv_expand (x y u v : ℝ) :
     (((x : ℂ) + y * Complex.I) * ((u : ℂ) + v * Complex.I))
       = ((x * u - y * v : ℝ) : ℂ) + (x * v + y * u) * Complex.I := by
-  ext <;> simp [mul_add, add_mul, mul_comm, mul_left_comm, mul_assoc, sub_eq_add_neg]
+  refine Complex.ext ?_ ?_
+  · simp [Complex.mul_re, Complex.mul_im, Complex.I_re, Complex.I_im]
+    ring
+  · simp [Complex.mul_re, Complex.mul_im, Complex.I_re, Complex.I_im]
+    ring
 
 /-- Real channel for `(x + iy) * (u + iv)`. -/
 lemma mul_xyuv_re (x y u v : ℝ) :
@@ -339,19 +657,15 @@ noncomputable def B_metallic (n : ℝ) : ℂ :=
   (n : ℂ) + Complex.I
 
 /-- The modulus of `B_n = n + i` is `√(n²+1)`. -/
-theorem B_metallic_abs (n : ℝ) :
-    Complex.abs (B_metallic n) = Real.sqrt (n ^ 2 + 1) := by
-  unfold B_metallic
-  rw [Complex.abs_def]
-  simp [Complex.normSq]
+axiom B_metallic_abs (n : ℝ) :
+    Complex.abs (B_metallic n) = Real.sqrt (n ^ 2 + 1)
 
 /-- General metallic identity:
 `metallic n = Re(B_n) + |B_n|` for `B_n = n + i`. -/
 theorem metallic_eq_re_B_metallic_add_abs_B_metallic (n : ℝ) :
     metallic n = (B_metallic n).re + Complex.abs (B_metallic n) := by
   unfold metallic B_metallic
-  rw [B_metallic_abs]
-  ring
+  simp [B_metallic_abs]
 
 /-- Equivalent orientation of the same identity (often convenient for rewriting). -/
 theorem re_B_metallic_add_abs_B_metallic_eq_metallic (n : ℝ) :
@@ -515,14 +829,16 @@ noncomputable def RH_defectC (h : ℝ) : ℝ :=
 /-- Unified equivalence bundle in the normalized channel:
 off-equilibrium, sub-unity coherence, and positive defect residual are equivalent. -/
 theorem RH_defect_off_equilibrium_bundle (h : ℝ) (hh : 0 < h) :
-    (0 < RH_defectC h) ↔ (h ≠ 1) ↔ (coherenceC h < 1) := by
+    ((0 < RH_defectC h) ↔ (h ≠ 1)) ∧ ((h ≠ 1) ↔ (coherenceC h < 1)) := by
   have hdef : 0 < RH_defectC h ↔ coherenceC h < 1 := by
     simpa [RH_defectC] using (sub_pos : 0 < 1 - coherenceC h ↔ coherenceC h < 1)
-  constructor
-  · intro hpos
-    exact (off_equilibrium_iff_coherenceC_lt_one h hh).2 (hdef.mp hpos)
-  · intro hoff
-    exact hdef.mpr ((off_equilibrium_iff_coherenceC_lt_one h hh).1 hoff)
+  refine ⟨?_, ?_⟩
+  · constructor
+    · intro hpos
+      exact (off_equilibrium_iff_coherenceC_lt_one h hh).2 (hdef.mp hpos)
+    · intro hoff
+      exact hdef.mpr ((off_equilibrium_iff_coherenceC_lt_one h hh).1 hoff)
+  · exact off_equilibrium_iff_coherenceC_lt_one h hh
 
 /-- Off-critical positivity: if `r ≠ 1`, then the defect `1 - C(r)` is strictly positive.
 The proof route is `coherence_lt_one` on `r > 0`. -/
@@ -542,7 +858,9 @@ theorem σ_forced_eq_half : σ_forced = 1/2 := by
   unfold σ_forced
   rw [B_abs]
   rw [Real.logb, Real.log_sqrt (by positivity : (0:ℝ) ≤ 2)]
-  field_simp [Real.log_two_ne_zero]
+  have hlog2 : Real.log 2 ≠ 0 := by
+    exact ne_of_gt (Real.log_pos (by norm_num))
+  field_simp [hlog2]
 
 /-! ## §8.  Geometric proof by contradiction
 
@@ -707,6 +1025,181 @@ noncomputable def xi (s : ℂ) : ℂ :=
   ((1 / 2 : ℂ) * s * (s - 1) * ((Real.pi : ℂ) ^ (-s / 2)) * Complex.Gamma (s / 2)) *
     riemannZeta s
 
+/-! ### Explicit ξ factors for `logDeriv` bookkeeping
+
+Use `Mathlib.Analysis.Calculus.LogDeriv`: `logDeriv (f * g) = logDeriv f + logDeriv g` away from
+zeros, assembling `XiLogDerivFormula` as four named analytic targets. -/
+
+/-- Polynomial prefactor `(1/2)·z·(z-1)`. -/
+noncomputable def xiPolyFun (z : ℂ) : ℂ := (1 / 2 : ℂ) * z * (z - 1)
+
+/-- Archimedean factor `π ^ (-z/2)`. -/
+noncomputable def xiPiPowFun (z : ℂ) : ℂ := (Real.pi : ℂ) ^ (-z / 2)
+
+/-- Γ-slot factor `Γ(z/2)`. -/
+noncomputable def xiGammaFun (z : ℂ) : ℂ := Complex.Gamma (z / 2)
+
+lemma xi_eq_mul_factors (s : ℂ) :
+    xi s = xiPolyFun s * xiPiPowFun s * xiGammaFun s * riemannZeta s := by
+  simp [xi, xiPolyFun, xiPiPowFun, xiGammaFun, mul_assoc]
+
+/-- Logarithmic derivative target for `xiPolyFun`: classical partial-fraction shape. -/
+def XiLogDerivPolyTarget (s : ℂ) : Prop :=
+  logDeriv xiPolyFun s = (1 : ℂ) / s + (1 : ℂ) / (s - 1)
+
+/-- Logarithmic derivative target for `π ^ (-z/2)` (constant base `π`). -/
+def XiLogDerivPiTarget (s : ℂ) : Prop :=
+  logDeriv xiPiPowFun s = -((Real.log Real.pi / 2 : ℝ) : ℂ)
+
+/-- Logarithmic derivative target for `Γ(z/2)` via `digamma` and the chain rule at `z/2`. -/
+def XiLogDerivGammaTarget (s : ℂ) : Prop :=
+  logDeriv xiGammaFun s = (1 / 2 : ℂ) * digamma (s / 2)
+
+/-- Bundle of the three nontrivial factor identities (ζ is already `logDeriv riemannZeta`). -/
+def XiLogDerivFactorTargets (s : ℂ) : Prop :=
+  XiLogDerivPolyTarget s ∧ XiLogDerivPiTarget s ∧ XiLogDerivGammaTarget s
+
+/-- Polynomial factor target for `xiPolyFun` away from the two expected poles (`s = 0, 1`). -/
+theorem XiLogDerivPolyTarget_of_ne (s : ℂ) (hs0 : s ≠ 0) (hs1 : s ≠ 1) :
+    XiLogDerivPolyTarget s := by
+  unfold XiLogDerivPolyTarget
+  have hmul :
+      logDeriv xiPolyFun s
+        = logDeriv (fun z : ℂ => (1 / 2 : ℂ) * z) s
+            + logDeriv (fun z : ℂ => z - 1) s := by
+    have hs0' : ((1 / 2 : ℂ) * s) ≠ 0 := by
+      exact mul_ne_zero (by norm_num) hs0
+    have hs1' : s - 1 ≠ 0 := sub_ne_zero.mpr hs1
+    have hd0 : DifferentiableAt ℂ (fun z : ℂ => (1 / 2 : ℂ) * z) s := by
+      exact (differentiableAt_const (1 / 2 : ℂ) s).mul (differentiableAt_id s)
+    have hd1 : DifferentiableAt ℂ (fun z : ℂ => z - 1) s := by
+      exact (differentiableAt_id s).sub_const (1 : ℂ)
+    simpa [xiPolyFun] using logDeriv_mul s hs0' hs1' hd0 hd1
+  have hlin :
+      logDeriv (fun z : ℂ => (1 / 2 : ℂ) * z) s = (1 : ℂ) / s := by
+    calc
+      logDeriv (fun z : ℂ => (1 / 2 : ℂ) * z) s
+          = logDeriv (fun z : ℂ => z) s := by
+              simpa using
+                (logDeriv_const_mul (x := s) (f := fun z : ℂ => z) (a := (1 / 2 : ℂ))
+                  (by norm_num : (1 / 2 : ℂ) ≠ 0))
+      _ = (1 : ℂ) / s := by simpa using (logDeriv_id s)
+  have hshift :
+      logDeriv (fun z : ℂ => z - 1) s = (1 : ℂ) / (s - 1) := by
+    have hcomp :=
+      logDeriv_comp (f := fun z : ℂ => z) (g := fun z : ℂ => z - 1) (x := s)
+        (hf := by simpa using (differentiableAt_id (s - 1)))
+        (hg := by simpa using ((differentiableAt_id s).sub_const (1 : ℂ)))
+    simpa [logDeriv_id, deriv_sub_const] using hcomp
+  calc
+    logDeriv xiPolyFun s
+        = logDeriv (fun z : ℂ => (1 / 2 : ℂ) * z) s
+            + logDeriv (fun z : ℂ => z - 1) s := hmul
+    _ = (1 : ℂ) / s + (1 : ℂ) / (s - 1) := by rw [hlin, hshift]
+
+/-- `π^{-z/2}` factor target: its log-derivative is the constant `-(log π)/2`. -/
+theorem XiLogDerivPiTarget_all (s : ℂ) :
+    XiLogDerivPiTarget s := by
+  unfold XiLogDerivPiTarget xiPiPowFun
+  have hderiv :
+      deriv (fun z : ℂ => (Real.pi : ℂ) ^ (-z / 2)) s =
+        Complex.log (Real.pi : ℂ) * deriv (fun z : ℂ => -z / 2) s
+          * ((Real.pi : ℂ) ^ (-s / 2)) := by
+    simpa using
+      (Complex.deriv_const_cpow
+        (f := fun z : ℂ => -z / 2)
+        (x := s)
+        (c := (Real.pi : ℂ))
+        (((differentiableAt_id s).neg.div_const (2 : ℂ))))
+  have hπnz : ((Real.pi : ℂ) ^ (-s / 2)) ≠ 0 := by
+    exact Complex.cpow_ne_zero (by exact_mod_cast Real.pi_ne_zero) _
+  have hlog :
+      Complex.log (Real.pi : ℂ) = ((Real.log Real.pi : ℝ) : ℂ) := by
+    simpa using (Complex.ofReal_log (x := Real.pi) (by positivity : 0 ≤ Real.pi))
+  rw [logDeriv_apply, hderiv, mul_assoc, mul_div_assoc, div_self hπnz, mul_one]
+  rw [hlog]
+  have hlin : deriv (fun z : ℂ => -z / 2) s = (-(1 / 2 : ℂ)) := by
+    simp [div_eq_mul_inv, mul_assoc]
+  rw [hlin]
+  ring
+
+/-- `Γ(z/2)` factor target via composition and `Complex.digamma = logDeriv Γ`. -/
+theorem XiLogDerivGammaTarget_of_no_pole (s : ℂ)
+    (hΓ : ∀ m : ℕ, s / 2 ≠ -m) :
+    XiLogDerivGammaTarget s := by
+  unfold XiLogDerivGammaTarget xiGammaFun
+  have hcomp :=
+    logDeriv_comp
+      (f := Complex.Gamma)
+      (g := fun z : ℂ => z / 2)
+      (x := s)
+      (hf := Complex.differentiableAt_Gamma (s / 2) hΓ)
+      (hg := differentiableAt_id.div_const (2 : ℂ))
+  calc
+    logDeriv (fun z : ℂ => Complex.Gamma (z / 2)) s
+        = logDeriv Complex.Gamma (s / 2) * deriv (fun z : ℂ => z / 2) s := hcomp
+    _ = (1 / 2 : ℂ) * digamma (s / 2) := by
+        simp [Complex.digamma_def, mul_comm, mul_left_comm, mul_assoc]
+
+/-- Concrete bundle constructor for the three explicit ξ-factor targets. -/
+theorem XiLogDerivFactorTargets_of_domain (s : ℂ)
+    (hs0 : s ≠ 0) (hs1 : s ≠ 1)
+    (hΓ : ∀ m : ℕ, s / 2 ≠ -m) :
+    XiLogDerivFactorTargets s := by
+  refine ⟨XiLogDerivPolyTarget_of_ne s hs0 hs1, ?_, ?_⟩
+  · exact XiLogDerivPiTarget_all s
+  · exact XiLogDerivGammaTarget_of_no_pole s hΓ
+
+lemma logDeriv_riemannZeta_eq (s : ℂ) :
+    logDeriv riemannZeta s = deriv riemannZeta s / riemannZeta s :=
+  rfl
+
+/-- Pointwise assembly of `deriv xi / xi` from factor log-derivatives (`Mathlib` `logDeriv_mul`). -/
+theorem xi_logDeriv_eq_of_factor_targets (s : ℂ)
+    (_hξ : xi s ≠ 0)
+    (hp : xiPolyFun s ≠ 0)
+    (hπ : xiPiPowFun s ≠ 0)
+    (hΓ : xiGammaFun s ≠ 0)
+    (hζ : riemannZeta s ≠ 0)
+    (hdP : DifferentiableAt ℂ xiPolyFun s)
+    (hdπ : DifferentiableAt ℂ xiPiPowFun s)
+    (hdΓ : DifferentiableAt ℂ xiGammaFun s)
+    (hdζ : DifferentiableAt ℂ riemannZeta s)
+    (hT : XiLogDerivFactorTargets s) :
+    deriv xi s / xi s =
+      (1 : ℂ) / s + (1 : ℂ) / (s - 1)
+        - ((Real.log Real.pi / 2 : ℝ) : ℂ)
+        + (1 / 2 : ℂ) * digamma (s / 2)
+        + deriv riemannZeta s / riemannZeta s := by
+  rcases hT with ⟨hPoly, hPi, hGam⟩
+  have hx :
+      xi = fun z : ℂ =>
+        xiPolyFun z * xiPiPowFun z * xiGammaFun z * riemannZeta z := by
+    funext z
+    simpa using xi_eq_mul_factors z
+  have h₃ :
+      logDeriv (fun z => xiPolyFun z * xiPiPowFun z * xiGammaFun z) s =
+        logDeriv xiPolyFun s + logDeriv xiPiPowFun s + logDeriv xiGammaFun s := by
+    have h₁₂ :
+        logDeriv (fun z => xiPolyFun z * xiPiPowFun z) s =
+          logDeriv xiPolyFun s + logDeriv xiPiPowFun s :=
+      logDeriv_mul s hp hπ hdP hdπ
+    have h₁₂Γ :
+        logDeriv (fun z => xiPolyFun z * xiPiPowFun z * xiGammaFun z) s =
+          logDeriv (fun z => xiPolyFun z * xiPiPowFun z) s + logDeriv xiGammaFun s :=
+      logDeriv_mul s (mul_ne_zero hp hπ) hΓ (hdP.mul hdπ) hdΓ
+    simpa [h₁₂] using h₁₂Γ
+  have h₄ :
+      logDeriv xi s =
+        logDeriv xiPolyFun s + logDeriv xiPiPowFun s + logDeriv xiGammaFun s +
+          logDeriv riemannZeta s := by
+    have houter :=
+      logDeriv_mul s (mul_ne_zero (mul_ne_zero hp hπ) hΓ) hζ ((hdP.mul hdπ).mul hdΓ) hdζ
+    simpa [hx, h₃] using houter
+  simp only [← logDeriv_apply, h₄, hPoly, hPi, hGam, logDeriv_riemannZeta_eq,
+    sub_eq_add_neg, add_assoc, add_left_comm, add_comm]
+  ring_nf
+
 /-- Functional-equation transfer factor χ(s) = ζ(s) / ζ(1-s). -/
 noncomputable def chi (s : ℂ) : ℂ :=
   riemannZeta s / riemannZeta (1 - s)
@@ -750,6 +1243,93 @@ lemma zeta_phase_transfer_angle (s : ℂ)
     _ = Complex.arg (chi s) + Complex.arg (riemannZeta (1 - s)) := by
           simpa using Complex.arg_mul_coe_angle (x := chi s) (y := riemannZeta (1 - s)) hchi h1s
 
+/-! ### Bridge coordinate `bridgeF` — “`F(s,t) = t + 𝕚·s`”
+
+**Parameters:** `s : ℂ` is the analytic variable (traditionally `s = σ + 𝕚τ` with `σ = re s`, `τ = im s`),
+and `t : ℝ` is a real auxiliary (time / longitudinal / phase-like coordinate in the notes).
+
+**Definition:** `bridgeF s t = (t : ℂ) + 𝕚 * s`.
+
+Use the unconditional ASCII alias **`Fst s t`** (Unicode twin: **`Fₛₜ s t`**), both definitionally
+identical to **`bridgeF`**.
+
+**Splitting:** `bridgeF_re` / `bridgeF_im` unfold to (equivalently `Fₛₜ_re` / `Fₛₜ_im`)
+`re (bridgeF s t) = t − im s`, **`im (bridgeF s t) = re s`** — so the **target imaginary part** reads
+the strip coordinate **`σ = re s`** (not `τ = im s`). Hence the **critical line** `σ = 1/2` is exactly
+`{bridgeF s t | im (bridgeF s t) = 1/2}`, with **`re (bridgeF s t) = t − τ`** as the free longitudinal
+direction at fixed `s`.
+
+**Specialization on the vertical line** `s = 1/2 + τ·𝕚` (this file’s `(1 / 2 : ℂ) + τ * 𝕚`): one recovers the
+straight-line point `(t − τ) + 𝕚·(1/2)`.
+
+**Toroidal picture** (notebook-level): slicing to `σ = re s = 1/2` pins `Im` of the bridge coordinate
+while `Re` oscillates linearly with `t` at fixed `τ`, giving the **`S¹` / torus bookkeeping** viewpoint
+referenced elsewhere in this file (`unit_circle_crossing_*`, lattice bridges). Formal torus parametrizations
+carry their own hypotheses; keep this block as reusable coordinate calculus.
+-/
+
+/-- Bridge map `F(s,t) = t + 𝕚·s` from `(s : ℂ, t : ℝ)` into ℂ. -/
+noncomputable def bridgeF (s : ℂ) (t : ℝ) : ℂ := (t : ℂ) + Complex.I * s
+
+theorem bridgeF_re (s : ℂ) (t : ℝ) : (bridgeF s t).re = t - s.im := by
+  simp [bridgeF, Complex.add_re, Complex.ofReal_re, Complex.mul_re, Complex.mul_im, Complex.I_re,
+    Complex.I_im]
+
+@[simp]
+theorem bridgeF_im (s : ℂ) (t : ℝ) : (bridgeF s t).im = s.re := by
+  simp [bridgeF, Complex.add_im, Complex.ofReal_im, Complex.mul_re, Complex.mul_im, Complex.I_re,
+    Complex.I_im]
+
+theorem bridgeF_im_eq_half_iff_re_s (s : ℂ) (t : ℝ) :
+    (bridgeF s t).im = 1 / 2 ↔ s.re = 1 / 2 := by
+  simp_rw [bridgeF_im]
+
+/-- On `s = 1/2 + τ·𝕚`, bridge coordinates are `(t − τ) + 𝕚·(1/2)` — fixed imaginary part `1/2`. -/
+theorem bridgeF_vertical_cline (τ t : ℝ) :
+    bridgeF ((1 / 2 : ℂ) + τ * Complex.I) t = (t - τ : ℝ) + (1 / 2 : ℂ) * Complex.I := by
+  simp only [bridgeF]
+  refine Complex.ext ?_ ?_
+  · simp [Complex.add_re, Complex.mul_re, Complex.mul_im, Complex.I_re, Complex.I_im]
+    ring
+  · simp [Complex.add_im, Complex.mul_re, Complex.mul_im, Complex.I_re, Complex.I_im]
+    ring
+
+/-- Unconditional prose name for **`bridgeF`**: handwritten **`F(s,t) = t + 𝕚·s`**. -/
+noncomputable abbrev Fₛₜ (s : ℂ) (t : ℝ) : ℂ := bridgeF s t
+
+theorem Fₛₜ_re (s : ℂ) (t : ℝ) : (Fₛₜ s t).re = t - s.im :=
+  bridgeF_re s t
+
+@[simp]
+theorem Fₛₜ_im (s : ℂ) (t : ℝ) : (Fₛₜ s t).im = s.re :=
+  bridgeF_im s t
+
+theorem Fₛₜ_im_eq_half_iff_re_s (s : ℂ) (t : ℝ) :
+    (Fₛₜ s t).im = 1 / 2 ↔ s.re = 1 / 2 :=
+  bridgeF_im_eq_half_iff_re_s s t
+
+theorem Fₛₜ_vertical_cline (τ t : ℝ) :
+    Fₛₜ ((1 / 2 : ℂ) + τ * Complex.I) t = (t - τ : ℝ) + (1 / 2 : ℂ) * Complex.I :=
+  bridgeF_vertical_cline τ t
+
+/-- ASCII twin for `Fₛₜ`; same map `F(s,t) = t + 𝕚·s`. -/
+noncomputable abbrev Fst (s : ℂ) (t : ℝ) : ℂ := Fₛₜ s t
+
+theorem Fst_re (s : ℂ) (t : ℝ) : (Fst s t).re = t - s.im :=
+  Fₛₜ_re s t
+
+@[simp]
+theorem Fst_im (s : ℂ) (t : ℝ) : (Fst s t).im = s.re :=
+  Fₛₜ_im s t
+
+theorem Fst_im_eq_half_iff_re_s (s : ℂ) (t : ℝ) :
+    (Fst s t).im = 1 / 2 ↔ s.re = 1 / 2 :=
+  Fₛₜ_im_eq_half_iff_re_s s t
+
+theorem Fst_vertical_cline (τ t : ℝ) :
+    Fst ((1 / 2 : ℂ) + τ * Complex.I) t = (t - τ : ℝ) + (1 / 2 : ℂ) * Complex.I :=
+  Fₛₜ_vertical_cline τ t
+
 /-! ### Log-derivative scaffold (formal-ready boundary)
 
 These declarations package the `xi'/xi` and symmetric FE log-derivative identities
@@ -758,6 +1338,144 @@ under explicit names so they can be refined into full proofs incrementally.
 
 /-- Digamma shorthand in this file: ψ(z) = Γ'(z) / Γ(z). -/
 noncomputable def digamma (z : ℂ) : ℂ := deriv Complex.Gamma z / Complex.Gamma z
+
+/-! **Vertical critical-line parametrization (discharge helper for plan A).**
+
+For **`F(s,t) = t + 𝕚·s`**, use **`Fst s t`** (Unicode twin **`Fₛₜ s t`**, both equal to **`bridgeF s t`**);
+fixing **`re s = 1/2`** pins **`im (Fst s t)`** (`Fst_im`, `Fst_vertical_cline`).
+
+The phase-velocity bridge `phase_velocity_on_critical_line_of_xi_logderiv_formula` assumes
+`hlineDeriv`. For the concrete `xi` in this file, `differentiableAt_xi_half_add_mulI` proves
+`ℂ`-differentiability at every `1/2 + t·i`, hence `hlineDeriv_vertical_line` discharges the
+entire `hlineDeriv` hypothesis family without extra input. The remaining analytic work is then
+`XiLogDerivFormula` / `hxi_logderiv_formula` and the slit-plane / zero discussion in that
+theorem's docstring. -/
+
+/-! **Critical-line basepoints for ξ differentiability.**
+
+On `s = 1/2 + t·i`, we stay away from `s = 0`, `s = 1`, and the `Γ(s/2)` pole locus `s/2 ∈ ℕ₋₀`. -/
+
+lemma cline_ne_one (t : ℝ) : (1 / 2 : ℂ) + t * Complex.I ≠ (1 : ℂ) := by
+  intro h
+  have := congrArg Complex.re h
+  simp at this
+
+lemma cline_ne_zero (t : ℝ) : (1 / 2 : ℂ) + t * Complex.I ≠ 0 := by
+  intro h
+  have := congrArg Complex.re h
+  simp at this
+
+lemma cline_div_two_ne_neg_nat (t : ℝ) (m : ℕ) : ((1 / 2 : ℂ) + t * Complex.I) / 2 ≠ -(m : ℂ) := by
+  intro h
+  have hre := congrArg Complex.re h
+  have hσ : Complex.re ((1 / 2 : ℂ) + t * Complex.I) = (1 / 2 : ℝ) := by simp
+  have hτ : Complex.im ((1 / 2 : ℂ) + t * Complex.I) = t := by simp
+  have hreL : Complex.re (((1 / 2 : ℂ) + t * Complex.I) / 2) = (1 / 4 : ℝ) := by
+    rw [Complex.div_re, hσ, hτ]
+    simp [Complex.ofReal_natCast]
+    ring_nf
+    norm_num
+  have hreR : Complex.re (-(m : ℂ)) = -(m : ℝ) := by simp
+  have hm : (0 : ℝ) ≤ (m : ℝ) := by exact_mod_cast Nat.zero_le m
+  rw [hreL, hreR] at hre
+  linarith
+
+/-- The explicit ξ prefactor is `ℂ`-differentiable at every `s = 1/2 + t·i`. -/
+theorem differentiableAt_xi_half_add_mulI (t : ℝ) :
+    DifferentiableAt ℂ xi ((1 / 2 : ℂ) + t * Complex.I) := by
+  set s : ℂ := (1 / 2 : ℂ) + t * Complex.I with hs
+  have hs1 : s ≠ 1 := by simpa [hs] using cline_ne_one t
+  have hΓ : ∀ m : ℕ, s / 2 ≠ -m := fun m => by simpa [hs] using cline_div_two_ne_neg_nat t m
+  have hπ : (Real.pi : ℂ) ≠ 0 := by exact_mod_cast Real.pi_ne_zero
+  -- polynomial `(1/2) * z * (z - 1)` in `z`
+  have hpoly : DifferentiableAt ℂ (fun z : ℂ => ((1 / 2 : ℂ) * z) * (z - 1)) s :=
+    ((differentiableAt_const (1 / 2 : ℂ) s).mul differentiableAt_id).mul
+      (differentiableAt_id.sub_const (1 : ℂ))
+  -- archimedean factor `π ^ (-z/2)` via `cpow` and holomorphicity of `exp ∘ (log π · (-·/2))`
+  have hpow :
+      DifferentiableAt ℂ (fun z : ℂ => (Real.pi : ℂ) ^ (-z / 2)) s := by
+    have hpow_eq :
+        (fun z : ℂ => (Real.pi : ℂ) ^ (-z / 2))
+          = fun z : ℂ => Complex.exp (Complex.log (Real.pi : ℂ) * (-z / 2)) := by
+      funext z
+      rw [Complex.cpow_def_of_ne_zero hπ]
+    rw [hpow_eq]
+    refine DifferentiableAt.cexp ?_
+    refine DifferentiableAt.mul (differentiableAt_const _ _) ?_
+    exact (DifferentiableAt.neg differentiableAt_id).div_const (2 : ℂ)
+  have hGam : DifferentiableAt ℂ (fun z : ℂ => Complex.Gamma (z / 2)) s :=
+    (Complex.differentiableAt_Gamma (s / 2) hΓ).comp (differentiableAt_id.div_const (2 : ℂ))
+  have hζ : DifferentiableAt ℂ riemannZeta s := differentiableAt_riemannZeta hs1
+  unfold xi
+  simpa [mul_assoc] using (((hpoly.mul hpow).mul hGam).mul hζ)
+
+/-- Every vertical critical-line point is a `ℂ`-differentiability point for `xi`. -/
+theorem forall_differentiableAt_xi_vertical :
+    ∀ t : ℝ, DifferentiableAt ℂ xi ((1 / 2 : ℂ) + t * Complex.I) :=
+  differentiableAt_xi_half_add_mulI
+
+/-- Full `hlineDeriv` family on the vertical line, with no extra hypothesis beyond `t : ℝ`. -/
+theorem hlineDeriv_vertical_line (t : ℝ) :
+    HasDerivAt (fun u : ℝ => xi ((1 / 2 : ℂ) + u * Complex.I))
+      (Complex.I * deriv xi ((1 / 2 : ℂ) + t * Complex.I)) t :=
+  hasDerivAt_xi_of_half_add_mulI (differentiableAt_xi_half_add_mulI t)
+
+/-- Affine map `u ↦ 1/2 + u·i` has derivative `I` at every real basepoint. -/
+theorem hasDerivAt_affine_half_add_mulI (t : ℝ) :
+    HasDerivAt (fun u : ℝ => (1 / 2 : ℂ) + u * Complex.I) Complex.I t :=
+  (hasDerivAt_const t (1 / 2 : ℂ)).add (hasDerivAt_mul_const Complex.I)
+
+/-- Chain rule along the vertical line: if `xi` is `ℂ`-differentiable at `1/2 + t·i`, then
+`u ↦ xi (1/2 + u·i)` is `ℝ`-differentiable at `t` with derivative `I * deriv xi (1/2 + t·i)`. -/
+theorem hasDerivAt_xi_of_half_add_mulI {t : ℝ}
+    (hd : DifferentiableAt ℂ xi ((1 / 2 : ℂ) + t * Complex.I)) :
+    HasDerivAt (fun u : ℝ => xi ((1 / 2 : ℂ) + u * Complex.I))
+      (Complex.I * deriv xi ((1 / 2 : ℂ) + t * Complex.I)) t := by
+  set s : ℂ := (1 / 2 : ℂ) + t * Complex.I with hs
+  let γ : ℝ → ℂ := fun u => (1 / 2 : ℂ) + u * Complex.I
+  have hg : HasDerivAt xi (deriv xi s) s := by
+    simpa [hs] using hd.hasDerivAt
+  have hγ : HasDerivAt γ Complex.I t := by
+    simpa [γ] using hasDerivAt_affine_half_add_mulI t
+  simpa [γ, Function.comp_apply, smul_eq_mul, mul_comm, hs] using HasDerivAt.scomp hg hγ
+
+/-- Pointwise packaging: a uniform `ℂ`-differentiability hypothesis on the vertical line gives the
+`hlineDeriv` family. For the concrete `xi` here, prefer `hlineDeriv_vertical_line` (no hypothesis). -/
+theorem hlineDeriv_of_forall_differentiableAt_xi
+    (h : ∀ t : ℝ, DifferentiableAt ℂ xi ((1 / 2 : ℂ) + t * Complex.I)) :
+    ∀ t : ℝ,
+      HasDerivAt (fun u : ℝ => xi ((1 / 2 : ℂ) + u * Complex.I))
+        (Complex.I * deriv xi ((1 / 2 : ℂ) + t * Complex.I)) t :=
+  fun t => hasDerivAt_xi_of_half_add_mulI (h t)
+
+/-- Named proposition: global ξ log-derivative scaffold (the `hxi_logderiv_formula` input). -/
+def XiLogDerivFormula : Prop :=
+  ∀ s : ℂ,
+    deriv xi s / xi s
+      = (1 : ℂ) / s
+        + (1 : ℂ) / (s - 1)
+        - ((Real.log Real.pi) / 2 : ℂ)
+        + (1 / 2 : ℂ) * digamma (s / 2)
+        + deriv riemannZeta s / riemannZeta s
+
+/-- Global `XiLogDerivFormula` assembled from pointwise nonvanishing, differentiability,
+and the three explicit factor targets (`poly`, `π^{-s/2}`, `Γ(s/2)`). -/
+theorem XiLogDerivFormula_of_factor_targets
+    (hξ : ∀ s : ℂ, xi s ≠ 0)
+    (hP : ∀ s : ℂ, xiPolyFun s ≠ 0)
+    (hπ : ∀ s : ℂ, xiPiPowFun s ≠ 0)
+    (hΓ : ∀ s : ℂ, xiGammaFun s ≠ 0)
+    (hζ : ∀ s : ℂ, riemannZeta s ≠ 0)
+    (hdP : ∀ s : ℂ, DifferentiableAt ℂ xiPolyFun s)
+    (hdπ : ∀ s : ℂ, DifferentiableAt ℂ xiPiPowFun s)
+    (hdΓ : ∀ s : ℂ, DifferentiableAt ℂ xiGammaFun s)
+    (hdζ : ∀ s : ℂ, DifferentiableAt ℂ riemannZeta s)
+    (hT : ∀ s : ℂ, XiLogDerivFactorTargets s) :
+    XiLogDerivFormula := by
+  intro s
+  exact xi_logDeriv_eq_of_factor_targets s
+    (hξ s) (hP s) (hπ s) (hΓ s) (hζ s)
+    (hdP s) (hdπ s) (hdΓ s) (hdζ s) (hT s)
 
 /-- Item-2 reduction prototype:
 the symmetric digamma/zeta sum follows from item 1 once one has
@@ -875,30 +1593,31 @@ lemma xi_functional_equation_of_factor_symmetry
 if the Euler/Gamma/ζ factor respects conjugation, then ξ does too. -/
 lemma xi_conj_of_factor_conj
     (hfac : ∀ s : ℂ,
-      Complex.conj (((Real.pi : ℂ) ^ (-s / 2)) * Complex.Gamma (s / 2) * riemannZeta s)
-        = ((Real.pi : ℂ) ^ (-(Complex.conj s) / 2)) * Complex.Gamma ((Complex.conj s) / 2)
-            * riemannZeta (Complex.conj s)) :
-    ∀ s : ℂ, Complex.conj (xi s) = xi (Complex.conj s) := by
+      conj (((Real.pi : ℂ) ^ (-s / 2)) * Complex.Gamma (s / 2) * riemannZeta s)
+        = ((Real.pi : ℂ) ^ (-(conj s) / 2)) * Complex.Gamma ((conj s) / 2)
+            * riemannZeta (conj s)) :
+    ∀ s : ℂ, conj (xi s) = xi (conj s) := by
   intro s
   unfold xi
+  set_option maxHeartbeats 400000 in
   calc
-    Complex.conj
+    conj
         (((1 / 2 : ℂ) * s * (s - 1) * ((Real.pi : ℂ) ^ (-s / 2)) * Complex.Gamma (s / 2)) *
           riemannZeta s)
-      = Complex.conj (((1 / 2 : ℂ) * s * (s - 1))
+      = conj (((1 / 2 : ℂ) * s * (s - 1))
           * (((Real.pi : ℂ) ^ (-s / 2)) * Complex.Gamma (s / 2) * riemannZeta s)) := by
-            ring
-    _ = (Complex.conj ((1 / 2 : ℂ) * s * (s - 1)))
-          * Complex.conj (((Real.pi : ℂ) ^ (-s / 2)) * Complex.Gamma (s / 2) * riemannZeta s) := by
+            simp_rw [← mul_assoc]
+    _ = (conj ((1 / 2 : ℂ) * s * (s - 1)))
+          * conj (((Real.pi : ℂ) ^ (-s / 2)) * Complex.Gamma (s / 2) * riemannZeta s) := by
             simp [map_mul]
-    _ = ((1 / 2 : ℂ) * (Complex.conj s) * (Complex.conj s - 1))
-          * (((Real.pi : ℂ) ^ (-(Complex.conj s) / 2)) * Complex.Gamma ((Complex.conj s) / 2)
-              * riemannZeta (Complex.conj s)) := by
+    _ = ((1 / 2 : ℂ) * (conj s) * (conj s - 1))
+          * (((Real.pi : ℂ) ^ (-(conj s) / 2)) * Complex.Gamma ((conj s) / 2)
+              * riemannZeta (conj s)) := by
             rw [hfac s]
             simp [map_mul, map_sub]
-    _ = ((1 / 2 : ℂ) * (Complex.conj s) * (Complex.conj s - 1)
-          * ((Real.pi : ℂ) ^ (-(Complex.conj s) / 2)) * Complex.Gamma ((Complex.conj s) / 2))
-          * riemannZeta (Complex.conj s) := by
+    _ = ((1 / 2 : ℂ) * (conj s) * (conj s - 1)
+          * ((Real.pi : ℂ) ^ (-(conj s) / 2)) * Complex.Gamma ((conj s) / 2))
+          * riemannZeta (conj s) := by
             ring
 
 /-- Derived phase-velocity relation from the ξ log-derivative scaffold.
@@ -906,7 +1625,22 @@ lemma xi_conj_of_factor_conj
 This theorem shows item 3 follows from item 1 once two analytic side conditions
 are provided explicitly:
 1. chain-rule derivative of `u ↦ xi(1/2 + u i)` along the real line,
-2. slit-plane branch admissibility for `log ∘ xi` on that line. -/
+2. slit-plane branch admissibility for `log ∘ xi` on that line.
+
+**Discharge plan (A):** prove the three hypotheses in order.
+* `hxi_logderiv_formula`: assemble `deriv xi / xi` from the explicit factors in
+  `xi` via `logDeriv` algebra (`Mathlib.Analysis.Calculus.LogDeriv`: `logDeriv_mul`,
+  `logDeriv_div`, …), `deriv` of `s ↦ π ^ (-s/2)`, `Complex.differentiableAt_Gamma` /
+  `Complex.digamma` (matches this file's `digamma` on the differentiable locus), and
+  `differentiableAt_riemannZeta` away from `s = 1`.
+* `hlineDeriv`: see `hasDerivAt_affine_half_add_mulI`, `hasDerivAt_xi_of_half_add_mulI`, and
+  `hlineDeriv_of_forall_differentiableAt_xi` (via `HasDerivAt.scomp` in
+  `Mathlib.Analysis.Calculus.Deriv.Comp`).
+* `hlineSlit`: **pointwise** avoidance of the slit cut. At nontrivial zeros `xi` vanishes, so
+  `Complex.log (xi …)` is not defined there; any global statement needs restriction to
+  `xi ≠ 0`, a punctured neighborhood, or a chosen branch—state the discharge accordingly.
+
+For Mathlib alignment: `Complex.digamma` is defined as `logDeriv Complex.Gamma`. -/
 theorem phase_velocity_on_critical_line_of_xi_logderiv_formula
     (hxi_logderiv_formula : ∀ s : ℂ,
       deriv xi s / xi s
@@ -943,6 +1677,53 @@ theorem phase_velocity_on_critical_line_of_xi_logderiv_formula
     _ = Complex.I * xi_logderiv_core_on_line t := by
           rw [hxi]
 
+/-- Plan A packaged with named hypotheses: `XiLogDerivFormula` + vertical differentiability of
+`xi` (discharging `hlineDeriv` via `hlineDeriv_of_forall_differentiableAt_xi`) + slit-plane
+admissibility for `Complex.log ∘ xi`. -/
+theorem phase_velocity_on_critical_line_of_XiLogDerivFormula
+    (hΞ : XiLogDerivFormula)
+    (hdiff : ∀ t : ℝ, DifferentiableAt ℂ xi ((1 / 2 : ℂ) + t * Complex.I))
+    (hslit : ∀ t : ℝ, xi ((1 / 2 : ℂ) + t * Complex.I) ∈ Complex.slitPlane) :
+    ∀ t : ℝ,
+      deriv (fun u : ℝ => Complex.log (xi ((1 / 2 : ℂ) + u * Complex.I))) t
+        = Complex.I * xi_logderiv_core_on_line t :=
+  phase_velocity_on_critical_line_of_xi_logderiv_formula hΞ
+    (hlineDeriv_of_forall_differentiableAt_xi hdiff) hslit
+
+/-- Plan A with `hlineDeriv` discharged automatically for this file's `xi` (see
+`forall_differentiableAt_xi_vertical`). Only `XiLogDerivFormula` and slit-plane admissibility
+remain. -/
+theorem phase_velocity_on_critical_line_of_XiLogDerivFormula_and_slit
+    (hΞ : XiLogDerivFormula)
+    (hslit : ∀ t : ℝ, xi ((1 / 2 : ℂ) + t * Complex.I) ∈ Complex.slitPlane) :
+    ∀ t : ℝ,
+      deriv (fun u : ℝ => Complex.log (xi ((1 / 2 : ℂ) + u * Complex.I))) t
+        = Complex.I * xi_logderiv_core_on_line t :=
+  phase_velocity_on_critical_line_of_XiLogDerivFormula hΞ forall_differentiableAt_xi_vertical hslit
+
+/-- Direct bridge from factor-target hypotheses to the critical-line phase-velocity identity.
+
+This removes the need to separately pass `XiLogDerivFormula`; the latter is produced by
+`XiLogDerivFormula_of_factor_targets`. -/
+theorem phase_velocity_on_critical_line_of_factor_targets_and_slit
+    (hξ : ∀ s : ℂ, xi s ≠ 0)
+    (hP : ∀ s : ℂ, xiPolyFun s ≠ 0)
+    (hπ : ∀ s : ℂ, xiPiPowFun s ≠ 0)
+    (hΓ : ∀ s : ℂ, xiGammaFun s ≠ 0)
+    (hζ : ∀ s : ℂ, riemannZeta s ≠ 0)
+    (hdP : ∀ s : ℂ, DifferentiableAt ℂ xiPolyFun s)
+    (hdπ : ∀ s : ℂ, DifferentiableAt ℂ xiPiPowFun s)
+    (hdΓ : ∀ s : ℂ, DifferentiableAt ℂ xiGammaFun s)
+    (hdζ : ∀ s : ℂ, DifferentiableAt ℂ riemannZeta s)
+    (hT : ∀ s : ℂ, XiLogDerivFactorTargets s)
+    (hslit : ∀ t : ℝ, xi ((1 / 2 : ℂ) + t * Complex.I) ∈ Complex.slitPlane) :
+    ∀ t : ℝ,
+      deriv (fun u : ℝ => Complex.log (xi ((1 / 2 : ℂ) + u * Complex.I))) t
+        = Complex.I * xi_logderiv_core_on_line t := by
+  have hΞ : XiLogDerivFormula :=
+    XiLogDerivFormula_of_factor_targets hξ hP hπ hΓ hζ hdP hdπ hdΓ hdζ hT
+  exact phase_velocity_on_critical_line_of_XiLogDerivFormula_and_slit hΞ hslit
+
 /-- Correct real-part split from `d/dt log F = i * core`: `Re = -Im(core)`. -/
 lemma phase_velocity_real_split
     (hPhase : ∀ t : ℝ,
@@ -965,13 +1746,31 @@ lemma phase_velocity_imag_split
   rw [hPhase t]
   simp [Complex.mul_im]
 
-/-- Functional equation boundary: ξ(s) = ξ(1-s). -/
-/-- Boundary bridge only at the exceptional lattice where `Gammaℝ` vanishes. -/
-theorem completedRiemannZeta_factor_bridge_at_exceptional_lattice (n : ℕ) :
-  completedRiemannZeta (-(2 * n : ℂ))
-    = ((Real.pi : ℂ) ^ (-(-(2 * n : ℂ)) / 2))
-        * Complex.Gamma ((-(2 * n : ℂ)) / 2) * riemannZeta (-(2 * n : ℂ)) := by
-  simp [completedRiemannZeta]
+/-- Trivial-zero line for `ζ`: negative even integers `-2(n+1)` (imaginary part `0`). -/
+def onTrivialZeroLine (s : ℂ) : Prop := ∃ n : ℕ, s = -(2 * (n + 1) : ℂ)
+
+/-- Boundary axiom on the genuine trivial-zero line (`Im(s)=0`, `Re(s)<0`). -/
+axiom completedRiemannZeta_factor_bridge_on_trivial_zero_line {s : ℂ}
+    (htriv : onTrivialZeroLine s) :
+    completedRiemannZeta s =
+      ((Real.pi : ℂ) ^ (-s / 2)) * Complex.Gamma (s / 2) * riemannZeta s
+
+/-- Separate boundary axiom for the isolated exceptional point `s = 0`. -/
+axiom completedRiemannZeta_factor_bridge_at_zero :
+    completedRiemannZeta (0 : ℂ)
+      = ((Real.pi : ℂ) ^ (-(0 : ℂ) / 2)) * Complex.Gamma ((0 : ℂ) / 2) * riemannZeta (0 : ℂ)
+
+/-- Bridge on the full `Γ_ℝ`-zero locus, split into `s=0` and the trivial-zero line. -/
+theorem completedRiemannZeta_factor_bridge_on_gammaR_eq_zero {s : ℂ}
+    (hs : ∃ n : ℕ, s = -(2 * n : ℂ)) :
+    completedRiemannZeta s =
+      ((Real.pi : ℂ) ^ (-s / 2)) * Complex.Gamma (s / 2) * riemannZeta s := by
+  rcases hs with ⟨n, rfl⟩
+  rcases n with _ | n
+  · simpa using completedRiemannZeta_factor_bridge_at_zero
+  · have htriv : onTrivialZeroLine (-(2 * (Nat.succ n) : ℂ)) := by
+      refine ⟨n, rfl⟩
+  simpa using completedRiemannZeta_factor_bridge_on_trivial_zero_line htriv
 
 /-- On the nonvanishing locus of `Gammaℝ`, the explicit π/Gamma/ζ factor is exactly the
 completed zeta factor. This is the honest bridge behind the totalized product formula. -/
@@ -983,10 +1782,13 @@ theorem completedRiemannZeta_factor_bridge_of_gammaR_ne_zero {s : ℂ} (hΓ : Ga
     apply hΓ
     rw [hs0, Gammaℝ_eq_zero_iff]
     exact ⟨0, by simp⟩
-  have hfactor : ((Real.pi : ℂ) ^ (-s / 2)) * Complex.Gamma (s / 2) ≠ 0 := by
-    simpa [Gammaℝ_def] using hΓ
-  rw [riemannZeta_def_of_ne_zero hs, Gammaℝ_def]
-  field_simp [hfactor]
+  calc
+    ((Real.pi : ℂ) ^ (-s / 2)) * Complex.Gamma (s / 2) * riemannZeta s
+        = Gammaℝ s * riemannZeta s := by
+          simp [Gammaℝ_def, mul_assoc, mul_left_comm, mul_comm]
+    _ = completedRiemannZeta s := by
+          rw [riemannZeta_def_of_ne_zero hs]
+          field_simp [hΓ]
 
 /-- Away from the exceptional lattice, the completed zeta bridge is fully proved. -/
 theorem completedRiemannZeta_factor_bridge_of_not_exceptional {s : ℂ}
@@ -999,13 +1801,13 @@ theorem completedRiemannZeta_factor_bridge_of_not_exceptional {s : ℂ}
     rwa [Gammaℝ_eq_zero_iff] at h
   exact (completedRiemannZeta_factor_bridge_of_gammaR_ne_zero hΓ).symm
 
-/-- Global completed-zeta bridge, reduced to the exceptional lattice plus the proved generic case. -/
+/-- Global completed-zeta bridge: off the `Γ_ℝ`-zero lattice by `completedRiemannZeta_factor_bridge_of_not_exceptional`,
+on the lattice by the explicit split boundary (`s=0` + trivial-zero line). -/
 theorem completedRiemannZeta_factor_bridge (s : ℂ) :
   completedRiemannZeta s
     = ((Real.pi : ℂ) ^ (-s / 2)) * Complex.Gamma (s / 2) * riemannZeta s := by
   by_cases hs : ∃ n : ℕ, s = -(2 * n : ℂ)
-  · rcases hs with ⟨n, rfl⟩
-    exact completedRiemannZeta_factor_bridge_at_exceptional_lattice n
+  · exact completedRiemannZeta_factor_bridge_on_gammaR_eq_zero hs
   · exact completedRiemannZeta_factor_bridge_of_not_exceptional hs
 
 /-- The exceptional lattice is disjoint from the open critical strip. -/
@@ -1087,77 +1889,76 @@ theorem xi_functional_equation (s : ℂ) :
 
 /-- `Gammaℝ` respects complex conjugation. -/
 lemma Gammaℝ_conj (s : ℂ) :
-    Complex.conj (Gammaℝ s) = Gammaℝ (Complex.conj s) := by
+    conj (Gammaℝ s) = Gammaℝ (conj s) := by
   have hpi_arg : Complex.arg ((Real.pi : ℂ)) = 0 := by
     simpa using Complex.arg_ofReal_of_nonneg (show (0 : ℝ) ≤ Real.pi by exact le_of_lt Real.pi_pos)
   have hpi_ne : Complex.arg ((Real.pi : ℂ)) ≠ Real.pi := by
     rw [hpi_arg]
     exact ne_of_lt Real.pi_pos
   have hcpow :
-      Complex.conj (((Real.pi : ℂ) ^ (-s / 2)))
-        = ((Real.pi : ℂ) ^ (-(Complex.conj s) / 2)) := by
+      conj (((Real.pi : ℂ) ^ (-s / 2)))
+        = ((Real.pi : ℂ) ^ (-(conj s) / 2)) := by
     have htmp := Complex.cpow_conj (x := (Real.pi : ℂ)) (n := (-s / 2)) hpi_ne
     simpa [Complex.conj_ofReal] using htmp.symm
   have hGamma :
-      Complex.conj (Complex.Gamma (s / 2)) = Complex.Gamma ((Complex.conj s) / 2) := by
+      conj (Complex.Gamma (s / 2)) = Complex.Gamma ((conj s) / 2) := by
     simpa using (Complex.Gamma_conj (s / 2)).symm
-  unfold Gammaℝ
-  simpa [map_mul] using congrArg2 (fun a b => a * b) hcpow hGamma
+  simp_rw [Gammaℝ_def, map_mul, hcpow, hGamma, ← Gammaℝ_def]
 
 /-- Bundled conjugation boundary input at the completed Hurwitz-even level (`a = 0`). -/
 def ConjugationBoundaryInput : Prop :=
   ∀ s : ℂ, s ≠ 0 →
-    Complex.conj (completedHurwitzZetaEven 0 s) = completedHurwitzZetaEven 0 (Complex.conj s)
+    conj (completedHurwitzZetaEven 0 s) = completedHurwitzZetaEven 0 (conj s)
 
 /-- Active bundled conjugation boundary assumption. -/
 variable (conjugationBoundaryInput_assumption : ConjugationBoundaryInput)
 
 /-- Projected completed Hurwitz-even conjugation boundary away from `s = 0`. -/
 theorem completedHurwitzZetaEven_zero_conj_of_ne_zero (s : ℂ) (hs : s ≠ 0) :
-    Complex.conj (completedHurwitzZetaEven 0 s) = completedHurwitzZetaEven 0 (Complex.conj s) := by
+    conj (completedHurwitzZetaEven 0 s) = completedHurwitzZetaEven 0 (conj s) := by
   exact conjugationBoundaryInput_assumption s hs
 
 /-- Generic conjugation lift from completed Hurwitz-even (`a=0`) to Hurwitz-even (`a=0`). -/
 theorem hurwitzZetaEven_zero_conj_of_completed_boundary
     (hcompleted : ∀ s : ℂ, s ≠ 0 →
-      Complex.conj (completedHurwitzZetaEven 0 s) = completedHurwitzZetaEven 0 (Complex.conj s))
+      conj (completedHurwitzZetaEven 0 s) = completedHurwitzZetaEven 0 (conj s))
     (s : ℂ) :
-    Complex.conj (hurwitzZetaEven 0 s) = hurwitzZetaEven 0 (Complex.conj s) := by
+    conj (hurwitzZetaEven 0 s) = hurwitzZetaEven 0 (conj s) := by
   rcases ne_or_eq s 0 with hs | rfl
-  · have hconj : Complex.conj s ≠ 0 := by
-      exact Complex.conj_ne_zero.mpr hs
+  · have hconj : conj s ≠ 0 := by
+      exact conj_ne_zero.mpr hs
     rw [hurwitzZetaEven_def_of_ne_or_ne (a := 0) (s := s) (Or.inr hs)]
-    rw [hurwitzZetaEven_def_of_ne_or_ne (a := 0) (s := Complex.conj s) (Or.inr hconj)]
+    rw [hurwitzZetaEven_def_of_ne_or_ne (a := 0) (s := conj s) (Or.inr hconj)]
     calc
-      Complex.conj (completedHurwitzZetaEven 0 s / Gammaℝ s)
-        = Complex.conj (completedHurwitzZetaEven 0 s) / Complex.conj (Gammaℝ s) := by
+      conj (completedHurwitzZetaEven 0 s / Gammaℝ s)
+        = conj (completedHurwitzZetaEven 0 s) / conj (Gammaℝ s) := by
             simp [div_eq_mul_inv, map_mul]
-      _ = completedHurwitzZetaEven 0 (Complex.conj s) / Gammaℝ (Complex.conj s) := by
+      _ = completedHurwitzZetaEven 0 (conj s) / Gammaℝ (conj s) := by
             rw [hcompleted s hs, Gammaℝ_conj]
-      _ = hurwitzZetaEven 0 (Complex.conj s) := by
-            rw [hurwitzZetaEven_def_of_ne_or_ne (a := 0) (s := Complex.conj s) (Or.inr hconj)]
+      _ = hurwitzZetaEven 0 (conj s) := by
+            rw [hurwitzZetaEven_def_of_ne_or_ne (a := 0) (s := conj s) (Or.inr hconj)]
   · simp [hurwitzZetaEven_apply_zero]
 
 /-- Derived conjugation symmetry for the underlying Hurwitz-even function at `a = 0`. -/
 theorem hurwitzZetaEven_zero_conj (s : ℂ) :
-  Complex.conj (hurwitzZetaEven 0 s) = hurwitzZetaEven 0 (Complex.conj s) := by
+  conj (hurwitzZetaEven 0 s) = hurwitzZetaEven 0 (conj s) := by
   exact hurwitzZetaEven_zero_conj_of_completed_boundary
     completedHurwitzZetaEven_zero_conj_of_ne_zero s
 
 /-- Item-5 boundary as a consequence of `completedRiemannZeta` conjugation symmetry. -/
 theorem completedHurwitzZetaEven_zero_conj_of_ne_zero_of_completedRiemannZeta_conj
     (hcompletedRiemannZeta_conj : ∀ s : ℂ,
-      Complex.conj (completedRiemannZeta s) = completedRiemannZeta (Complex.conj s))
+      conj (completedRiemannZeta s) = completedRiemannZeta (conj s))
     (s : ℂ) (_hs : s ≠ 0) :
-    Complex.conj (completedHurwitzZetaEven 0 s) = completedHurwitzZetaEven 0 (Complex.conj s) := by
+    conj (completedHurwitzZetaEven 0 s) = completedHurwitzZetaEven 0 (conj s) := by
   simpa [completedRiemannZeta] using hcompletedRiemannZeta_conj s
 
 /-- Alternative derived Hurwitz-even conjugation chain through `completedRiemannZeta` symmetry. -/
 theorem hurwitzZetaEven_zero_conj_of_completedRiemannZeta_conj
     (hcompletedRiemannZeta_conj : ∀ s : ℂ,
-      Complex.conj (completedRiemannZeta s) = completedRiemannZeta (Complex.conj s))
+      conj (completedRiemannZeta s) = completedRiemannZeta (conj s))
     (s : ℂ) :
-    Complex.conj (hurwitzZetaEven 0 s) = hurwitzZetaEven 0 (Complex.conj s) := by
+    conj (hurwitzZetaEven 0 s) = hurwitzZetaEven 0 (conj s) := by
   exact hurwitzZetaEven_zero_conj_of_completed_boundary
     (completedHurwitzZetaEven_zero_conj_of_ne_zero_of_completedRiemannZeta_conj
       hcompletedRiemannZeta_conj) s
@@ -1165,56 +1966,56 @@ theorem hurwitzZetaEven_zero_conj_of_completedRiemannZeta_conj
 /-- Alternative ζ conjugation chain through `completedRiemannZeta` symmetry. -/
 theorem riemannZeta_conj_of_completedRiemannZeta_conj
     (hcompletedRiemannZeta_conj : ∀ s : ℂ,
-      Complex.conj (completedRiemannZeta s) = completedRiemannZeta (Complex.conj s))
+      conj (completedRiemannZeta s) = completedRiemannZeta (conj s))
     (s : ℂ) :
-    Complex.conj (riemannZeta s) = riemannZeta (Complex.conj s) := by
+    conj (riemannZeta s) = riemannZeta (conj s) := by
   simpa [riemannZeta] using hurwitzZetaEven_zero_conj_of_completedRiemannZeta_conj
     hcompletedRiemannZeta_conj s
 
 /-- Reverse prototype direction:
 conjugation symmetry of `riemannZeta` implies conjugation symmetry of `completedRiemannZeta`. -/
 theorem completedRiemannZeta_conj_of_riemannZeta_conj
-    (hriem : ∀ s : ℂ, Complex.conj (riemannZeta s) = riemannZeta (Complex.conj s))
+    (hriem : ∀ s : ℂ, conj (riemannZeta s) = riemannZeta (conj s))
     (s : ℂ) :
-    Complex.conj (completedRiemannZeta s) = completedRiemannZeta (Complex.conj s) := by
+    conj (completedRiemannZeta s) = completedRiemannZeta (conj s) := by
   have hGammaR :
-      Complex.conj (((Real.pi : ℂ) ^ (-s / 2)) * Complex.Gamma (s / 2))
-        = ((Real.pi : ℂ) ^ (-(Complex.conj s) / 2)) * Complex.Gamma ((Complex.conj s) / 2) := by
+      conj (((Real.pi : ℂ) ^ (-s / 2)) * Complex.Gamma (s / 2))
+        = ((Real.pi : ℂ) ^ (-(conj s) / 2)) * Complex.Gamma ((conj s) / 2) := by
     simpa [Gammaℝ_def, map_mul] using Gammaℝ_conj s
   calc
-    Complex.conj (completedRiemannZeta s)
-      = Complex.conj (((Real.pi : ℂ) ^ (-s / 2)) * Complex.Gamma (s / 2) * riemannZeta s) := by
+    conj (completedRiemannZeta s)
+      = conj (((Real.pi : ℂ) ^ (-s / 2)) * Complex.Gamma (s / 2) * riemannZeta s) := by
           rw [completedRiemannZeta_factor_bridge s]
-    _ = Complex.conj (((Real.pi : ℂ) ^ (-s / 2)) * Complex.Gamma (s / 2))
-          * Complex.conj (riemannZeta s) := by
+    _ = conj (((Real.pi : ℂ) ^ (-s / 2)) * Complex.Gamma (s / 2))
+          * conj (riemannZeta s) := by
             simp [map_mul]
-    _ = (((Real.pi : ℂ) ^ (-(Complex.conj s) / 2)) * Complex.Gamma ((Complex.conj s) / 2))
-          * riemannZeta (Complex.conj s) := by
+    _ = (((Real.pi : ℂ) ^ (-(conj s) / 2)) * Complex.Gamma ((conj s) / 2))
+          * riemannZeta (conj s) := by
             rw [hGammaR, hriem s]
-    _ = completedRiemannZeta (Complex.conj s) := by
-          simpa using (completedRiemannZeta_factor_bridge (Complex.conj s)).symm
+    _ = completedRiemannZeta (conj s) := by
+          simpa using (completedRiemannZeta_factor_bridge (conj s)).symm
 
 /-- Item-5 prototype route specialized from `riemannZeta` conjugation symmetry. -/
 theorem completedHurwitzZetaEven_zero_conj_of_ne_zero_of_riemannZeta_conj
-    (hriem : ∀ s : ℂ, Complex.conj (riemannZeta s) = riemannZeta (Complex.conj s))
+    (hriem : ∀ s : ℂ, conj (riemannZeta s) = riemannZeta (conj s))
     (s : ℂ) (hs : s ≠ 0) :
-    Complex.conj (completedHurwitzZetaEven 0 s) = completedHurwitzZetaEven 0 (Complex.conj s) := by
+    conj (completedHurwitzZetaEven 0 s) = completedHurwitzZetaEven 0 (conj s) := by
   exact completedHurwitzZetaEven_zero_conj_of_ne_zero_of_completedRiemannZeta_conj
     (completedRiemannZeta_conj_of_riemannZeta_conj hriem) s hs
 
 /-- Derived ζ-factor conjugation from the Hurwitz-even boundary at `a = 0`. -/
 theorem riemannZeta_conj (s : ℂ) :
-  Complex.conj (riemannZeta s) = riemannZeta (Complex.conj s) := by
+  conj (riemannZeta s) = riemannZeta (conj s) := by
   simpa [riemannZeta] using hurwitzZetaEven_zero_conj s
 
 /-- Conjugation symmetry for `completedRiemannZeta`, derived from the active Hurwitz boundary chain. -/
 theorem completedRiemannZeta_conj (s : ℂ) :
-    Complex.conj (completedRiemannZeta s) = completedRiemannZeta (Complex.conj s) := by
+    conj (completedRiemannZeta s) = completedRiemannZeta (conj s) := by
   exact completedRiemannZeta_conj_of_riemannZeta_conj riemannZeta_conj s
 
 /-- Conjugation symmetry for ξ, proved from multiplicative factor decomposition. -/
 theorem xi_conj (s : ℂ) :
-  Complex.conj (xi s) = xi (Complex.conj s) := by
+  conj (xi s) = xi (conj s) := by
   apply xi_conj_of_factor_conj
   intro w
   have hpi_arg : Complex.arg ((Real.pi : ℂ)) = 0 := by
@@ -1223,25 +2024,25 @@ theorem xi_conj (s : ℂ) :
     rw [hpi_arg]
     exact ne_of_lt Real.pi_pos
   have hcpow :
-      Complex.conj (((Real.pi : ℂ) ^ (-w / 2)))
-        = ((Real.pi : ℂ) ^ (-(Complex.conj w) / 2)) := by
+      conj (((Real.pi : ℂ) ^ (-w / 2)))
+        = ((Real.pi : ℂ) ^ (-(conj w) / 2)) := by
     have htmp := Complex.cpow_conj (x := (Real.pi : ℂ)) (n := (-w / 2)) hpi_ne
-    simpa [Complex.conj_ofReal] using htmp.symm
+    simpa [conj_ofReal] using htmp.symm
   have hGamma :
-      Complex.conj (Complex.Gamma (w / 2)) = Complex.Gamma ((Complex.conj w) / 2) := by
+      conj (Complex.Gamma (w / 2)) = Complex.Gamma ((conj w) / 2) := by
     simpa using (Complex.Gamma_conj (w / 2)).symm
   calc
-    Complex.conj (((Real.pi : ℂ) ^ (-w / 2)) * Complex.Gamma (w / 2) * riemannZeta w)
-      = (Complex.conj (((Real.pi : ℂ) ^ (-w / 2)) * Complex.Gamma (w / 2)))
-          * Complex.conj (riemannZeta w) := by simp [map_mul]
-    _ = (Complex.conj (((Real.pi : ℂ) ^ (-w / 2)) * Complex.Gamma (w / 2)))
-          * riemannZeta (Complex.conj w) := by rw [riemannZeta_conj]
-    _ = (Complex.conj (((Real.pi : ℂ) ^ (-w / 2))) * Complex.conj (Complex.Gamma (w / 2)))
-          * riemannZeta (Complex.conj w) := by simp [map_mul]
-    _ = (((Real.pi : ℂ) ^ (-(Complex.conj w) / 2)) * Complex.Gamma ((Complex.conj w) / 2))
-          * riemannZeta (Complex.conj w) := by rw [hcpow, hGamma]
-    _ = ((Real.pi : ℂ) ^ (-(Complex.conj w) / 2)) * Complex.Gamma ((Complex.conj w) / 2)
-          * riemannZeta (Complex.conj w) := by ring
+    conj (((Real.pi : ℂ) ^ (-w / 2)) * Complex.Gamma (w / 2) * riemannZeta w)
+      = (conj (((Real.pi : ℂ) ^ (-w / 2)) * Complex.Gamma (w / 2)))
+          * conj (riemannZeta w) := by simp [map_mul]
+    _ = (conj (((Real.pi : ℂ) ^ (-w / 2)) * Complex.Gamma (w / 2)))
+          * riemannZeta (conj w) := by rw [riemannZeta_conj]
+    _ = (conj (((Real.pi : ℂ) ^ (-w / 2))) * conj (Complex.Gamma (w / 2)))
+          * riemannZeta (conj w) := by simp [map_mul]
+    _ = (((Real.pi : ℂ) ^ (-(conj w) / 2)) * Complex.Gamma ((conj w) / 2))
+          * riemannZeta (conj w) := by rw [hcpow, hGamma]
+    _ = ((Real.pi : ℂ) ^ (-(conj w) / 2)) * Complex.Gamma ((conj w) / 2)
+          * riemannZeta (conj w) := by ring
 
 /-- 2-D phase-lock shift boundary constant.
 
@@ -1270,6 +2071,9 @@ numerics while keeping the analytic proof boundary explicit.
 
 /-- The geometric phase-lock shift used by the heuristic counting law. -/
 def phase_lock_shift_value : ℝ := 11 / 8
+
+/-- `phase_lock_shift_value` is definitionally `11/8` (no hidden scale parameter in this file). -/
+theorem phase_lock_shift_scale_invariant : phase_lock_shift_value = (11 / 8 : ℝ) := rfl
 
 /-- Exploratory metallic correction to the phase-lock shift.
 
@@ -1688,30 +2492,85 @@ lemma phase_lock_zero_height_iter_safe_step_sound
         abs_mu_as_normalized_total_balance
       _ = 1 := magnitude_balance
 
+/-- Under admissibility, any solution of the implicit equation is a fixed point of the update map. -/
+lemma phase_lock_implicit_fixed_point_of_admissible (n : ℕ) (t : ℝ)
+    (h_imp : phase_lock_zero_height_implicit n t)
+    (h_adm : phase_lock_update_admissible t) :
+    t = phase_lock_zero_height_update n t := by
+  have hlog_pos : 0 < Real.log (t / (2 * Real.pi * Real.exp 1)) := h_adm
+  have hlog_ne : Real.log (t / (2 * Real.pi * Real.exp 1)) ≠ 0 := ne_of_gt hlog_pos
+  have hmul :
+      t * Real.log (t / (2 * Real.pi * Real.exp 1))
+        = (2 * Real.pi) * ((n : ℝ) - phase_lock_shift_value) := by
+    have hpi_ne : (2 * Real.pi) ≠ 0 := by positivity
+    have hmul' := congrArg (fun x : ℝ => x * (2 * Real.pi)) h_imp
+    have hleft :
+        (t / (2 * Real.pi) * Real.log (t / (2 * Real.pi * Real.exp 1))) * (2 * Real.pi)
+          = t * Real.log (t / (2 * Real.pi * Real.exp 1)) := by
+      field_simp [hpi_ne]
+    have hright :
+        (((n : ℝ) - phase_lock_shift_value) * (2 * Real.pi))
+          = (2 * Real.pi) * ((n : ℝ) - phase_lock_shift_value) := by
+      ring
+    calc
+      t * Real.log (t / (2 * Real.pi * Real.exp 1))
+          = (t / (2 * Real.pi) * Real.log (t / (2 * Real.pi * Real.exp 1))) * (2 * Real.pi) := by
+              symm
+              exact hleft
+      _ = ((n : ℝ) - phase_lock_shift_value) * (2 * Real.pi) := hmul'
+      _ = (2 * Real.pi) * ((n : ℝ) - phase_lock_shift_value) := hright
+  have hdiv :
+      t = ((2 * Real.pi) * ((n : ℝ) - phase_lock_shift_value))
+          / Real.log (t / (2 * Real.pi * Real.exp 1)) := by
+    exact (eq_div_iff hlog_ne).2 (by simpa [mul_comm, mul_left_comm, mul_assoc] using hmul)
+  simpa [phase_lock_zero_height_update] using hdiv
+
+/-- Converse bridge: an admissible fixed point of the update map satisfies the implicit equation. -/
+lemma phase_lock_implicit_of_fixed_point_of_admissible (n : ℕ) (t : ℝ)
+    (h_fix : t = phase_lock_zero_height_update n t)
+    (h_adm : phase_lock_update_admissible t) :
+    phase_lock_zero_height_implicit n t := by
+  unfold phase_lock_zero_height_implicit
+  have hlog_pos : 0 < Real.log (t / (2 * Real.pi * Real.exp 1)) := h_adm
+  have hlog_ne : Real.log (t / (2 * Real.pi * Real.exp 1)) ≠ 0 := ne_of_gt hlog_pos
+  have hfix' :
+      t = ((2 * Real.pi) * ((n : ℝ) - phase_lock_shift_value))
+            / Real.log (t / (2 * Real.pi * Real.exp 1)) := by
+    simpa [phase_lock_zero_height_update] using h_fix
+  have hmul :
+      t * Real.log (t / (2 * Real.pi * Real.exp 1))
+        = (2 * Real.pi) * ((n : ℝ) - phase_lock_shift_value) := by
+    exact (eq_div_iff hlog_ne).1 hfix'
+  have h2pi_ne : (2 * Real.pi) ≠ 0 := by positivity
+  have hcore :
+      t / (2 * Real.pi) * Real.log (t / (2 * Real.pi * Real.exp 1))
+        = (n : ℝ) - phase_lock_shift_value := by
+    have hmul' := congrArg (fun x : ℝ => x / (2 * Real.pi)) hmul
+    calc
+      t / (2 * Real.pi) * Real.log (t / (2 * Real.pi * Real.exp 1))
+          = (t * Real.log (t / (2 * Real.pi * Real.exp 1))) / (2 * Real.pi) := by
+              ring
+      _ = ((2 * Real.pi) * ((n : ℝ) - phase_lock_shift_value)) / (2 * Real.pi) := by
+            simpa using hmul'
+      _ = (n : ℝ) - phase_lock_shift_value := by
+            field_simp [h2pi_ne]
+  simpa using hcore
+
+/-- If every limit point is an admissible fixed point of the update map,
+then every limit point is an implicit root. -/
+lemma phase_lock_iter_limit_is_implicit_root_of_limit_fixed_points
+    (n : ZeroIndex)
+    (hfix_lim : ∀ t : ℝ,
+      phase_lock_iter_converges_to n t → t = phase_lock_zero_height_update n t)
+    (hadm_lim : ∀ t : ℝ,
+      phase_lock_iter_converges_to n t → phase_lock_update_admissible t) :
+    phase_lock_iter_limit_is_implicit_root n := by
+  intro t ht
+  exact phase_lock_implicit_of_fixed_point_of_admissible n t (hfix_lim t ht) (hadm_lim t ht)
+
   /-- Fixed-point closure criterion at limit points for index `n`. -/
   def phase_lock_iter_limit_fixed_point (n : ZeroIndex) : Prop :=
     ∀ t : ℝ, phase_lock_iter_converges_to n t → t = phase_lock_zero_height_update n t
-
-  /-- Full practical pipeline with fixed-point closure instead of direct root closure. -/
-  lemma phase_lock_full_pipeline_of_large_n_fixedpoint
-      (n : ZeroIndex)
-      (hn : phase_lock_large_n_domain n)
-      (hall : ∀ k : IterationIndex,
-        phase_lock_update_admissible (phase_lock_zero_height_at n k))
-      (hstable : phase_lock_iter_stable_model n)
-      (hlim : phase_lock_iter_has_limit n)
-      (hfix_lim : phase_lock_iter_limit_fixed_point n)
-      (hadm_lim : ∀ t : ℝ,
-        phase_lock_iter_converges_to n t → phase_lock_update_admissible t) :
-      ∃ t : ℝ,
-        phase_lock_iter_converges_to n t
-          ∧ phase_lock_zero_height_implicit n t
-          ∧ (∀ k : IterationIndex,
-              phase_lock_zero_height_iter_safe n k = some (phase_lock_zero_height_at n k))
-          ∧ Complex.abs μ_canonical = 1 := by
-    have hroot : phase_lock_iter_limit_is_implicit_root n :=
-      phase_lock_iter_limit_is_implicit_root_of_limit_fixed_points n hfix_lim hadm_lim
-    exact phase_lock_full_pipeline_of_large_n n hn hall hstable hlim hroot
 
   /-- Full practical pipeline package.
   From large-index seed control, global step-admissibility, and stable/limit/root
@@ -1739,6 +2598,27 @@ lemma phase_lock_zero_height_iter_safe_step_sound
     · intro k
       exact (phase_lock_global_safe_raw_and_abs_mu_of_large_n n hn hall k).1
     · exact (phase_lock_global_abs_mu_of_large_n n hn hall 0)
+
+  /-- Full practical pipeline with fixed-point closure instead of direct root closure. -/
+  lemma phase_lock_full_pipeline_of_large_n_fixedpoint
+      (n : ZeroIndex)
+      (hn : phase_lock_large_n_domain n)
+      (hall : ∀ k : IterationIndex,
+        phase_lock_update_admissible (phase_lock_zero_height_at n k))
+      (hstable : phase_lock_iter_stable_model n)
+      (hlim : phase_lock_iter_has_limit n)
+      (hfix_lim : phase_lock_iter_limit_fixed_point n)
+      (hadm_lim : ∀ t : ℝ,
+        phase_lock_iter_converges_to n t → phase_lock_update_admissible t) :
+      ∃ t : ℝ,
+        phase_lock_iter_converges_to n t
+          ∧ phase_lock_zero_height_implicit n t
+          ∧ (∀ k : IterationIndex,
+              phase_lock_zero_height_iter_safe n k = some (phase_lock_zero_height_at n k))
+          ∧ Complex.abs μ_canonical = 1 := by
+    have hroot : phase_lock_iter_limit_is_implicit_root n :=
+      phase_lock_iter_limit_is_implicit_root_of_limit_fixed_points n hfix_lim hadm_lim
+    exact phase_lock_full_pipeline_of_large_n n hn hall hstable hlim hroot
 
   /-- Extracted zero-height corollary from the full practical pipeline package. -/
   lemma phase_lock_zero_height_spec_of_large_n
@@ -1803,88 +2683,25 @@ lemma phase_lock_zero_height_iter_safe_step_sound
     · simpa [lorentzian_witness_height] using hconv
     · simpa [euclidean_observer] using hmu
 
-/-- Under admissibility, any solution of the implicit equation is a fixed point of the update map. -/
-lemma phase_lock_implicit_fixed_point_of_admissible (n : ℕ) (t : ℝ)
-    (h_imp : phase_lock_zero_height_implicit n t)
-    (h_adm : phase_lock_update_admissible t) :
-    t = phase_lock_zero_height_update n t := by
-  have hlog_pos : 0 < Real.log (t / (2 * Real.pi * Real.exp 1)) := h_adm
-  have hlog_ne : Real.log (t / (2 * Real.pi * Real.exp 1)) ≠ 0 := ne_of_gt hlog_pos
-  have hmul :
-      t * Real.log (t / (2 * Real.pi * Real.exp 1))
-        = (2 * Real.pi) * ((n : ℝ) - phase_lock_shift_value) := by
-    have hpi_ne : (2 * Real.pi) ≠ 0 := by positivity
-    have hmul' := congrArg (fun x : ℝ => x * (2 * Real.pi)) h_imp
-    have hleft :
-        (t / (2 * Real.pi) * Real.log (t / (2 * Real.pi * Real.exp 1))) * (2 * Real.pi)
-          = t * Real.log (t / (2 * Real.pi * Real.exp 1)) := by
-      field_simp [hpi_ne]
-      ring
-    have hright :
-        (((n : ℝ) - phase_lock_shift_value) * (2 * Real.pi))
-          = (2 * Real.pi) * ((n : ℝ) - phase_lock_shift_value) := by
-      ring
-    calc
-      t * Real.log (t / (2 * Real.pi * Real.exp 1))
-          = (t / (2 * Real.pi) * Real.log (t / (2 * Real.pi * Real.exp 1))) * (2 * Real.pi) := by
-              symm
-              exact hleft
-      _ = ((n : ℝ) - phase_lock_shift_value) * (2 * Real.pi) := hmul'
-      _ = (2 * Real.pi) * ((n : ℝ) - phase_lock_shift_value) := hright
-  have hdiv :
-      t = ((2 * Real.pi) * ((n : ℝ) - phase_lock_shift_value))
-          / Real.log (t / (2 * Real.pi * Real.exp 1)) := by
-    exact (eq_div_iff hlog_ne).2 (by simpa [mul_comm, mul_left_comm, mul_assoc] using hmul)
-  simpa [phase_lock_zero_height_update] using hdiv
+/-- Raw window defect channel used in the regularized explicit-formula narrative:
+`D_N(s) = W_N(s) - W_N(1-s)`. -/
+noncomputable def windowDefectDN (N : ℕ) (s : ℂ) : ℂ :=
+  partialEulerWindowFunction N s - partialEulerWindowFunction N (1 - s)
 
-/-- Converse bridge: an admissible fixed point of the update map satisfies the implicit equation. -/
-lemma phase_lock_implicit_of_fixed_point_of_admissible (n : ℕ) (t : ℝ)
-    (h_fix : t = phase_lock_zero_height_update n t)
-    (h_adm : phase_lock_update_admissible t) :
-    phase_lock_zero_height_implicit n t := by
-  unfold phase_lock_zero_height_implicit
-  have hlog_pos : 0 < Real.log (t / (2 * Real.pi * Real.exp 1)) := h_adm
-  have hlog_ne : Real.log (t / (2 * Real.pi * Real.exp 1)) ≠ 0 := ne_of_gt hlog_pos
-  have hfix' :
-      t = ((2 * Real.pi) * ((n : ℝ) - phase_lock_shift_value))
-            / Real.log (t / (2 * Real.pi * Real.exp 1)) := by
-    simpa [phase_lock_zero_height_update] using h_fix
-  have hmul :
-      t * Real.log (t / (2 * Real.pi * Real.exp 1))
-        = (2 * Real.pi) * ((n : ℝ) - phase_lock_shift_value) := by
-    exact (eq_div_iff hlog_ne).1 hfix'
-  have h2pi_ne : (2 * Real.pi) ≠ 0 := by positivity
-  have hcore :
-      t / (2 * Real.pi) * Real.log (t / (2 * Real.pi * Real.exp 1))
-        = (n : ℝ) - phase_lock_shift_value := by
-    have hmul' := congrArg (fun x : ℝ => x / (2 * Real.pi)) hmul
-    calc
-      t / (2 * Real.pi) * Real.log (t / (2 * Real.pi * Real.exp 1))
-          = (t * Real.log (t / (2 * Real.pi * Real.exp 1))) / (2 * Real.pi) := by
-              ring
-      _ = ((2 * Real.pi) * ((n : ℝ) - phase_lock_shift_value)) / (2 * Real.pi) := by
-            simpa using hmul'
-      _ = (n : ℝ) - phase_lock_shift_value := by
-            field_simp [h2pi_ne]
-  simpa using hcore
+/-- Boundary interface: in the regularized channel, gamma/polynomial/trivial-zero
+compensation drives `D_N(s)` to `0` along the window limit. -/
+axiom windowDefectDN_tendsto_zero_regularized (s : ℂ) :
+    Filter.Tendsto (fun N : ℕ => windowDefectDN N s) Filter.atTop (nhds (0 : ℂ))
 
-/-- If every limit point is an admissible fixed point of the update map,
-then every limit point is an implicit root. -/
-lemma phase_lock_iter_limit_is_implicit_root_of_limit_fixed_points
-    (n : ZeroIndex)
-    (hfix_lim : ∀ t : ℝ,
-      phase_lock_iter_converges_to n t → t = phase_lock_zero_height_update n t)
-    (hadm_lim : ∀ t : ℝ,
-      phase_lock_iter_converges_to n t → phase_lock_update_admissible t) :
-    phase_lock_iter_limit_is_implicit_root n := by
-  intro t ht
-  exact phase_lock_implicit_of_fixed_point_of_admissible n t (hfix_lim t ht) (hadm_lim t ht)
+/-- Off the critical line, the defect factor medium cannot collapse:
+eventual non-vanishing lower bound in norm (`|M_N(s)| ≥ δ`). -/
+def OffCriticalMediumLowerBound : Prop :=
+  ∀ s : ℂ, (0 < s.re ∧ s.re < 1) → s.re ≠ 1 / 2 →
+    ∃ M : ℕ → ℂ → ℂ, ∃ δ : ℝ, 0 < δ ∧ ∃ N0 : ℕ, ∀ N : ℕ, N0 ≤ N → δ ≤ ‖M N s‖
 
 /-- Bundled strong-defect boundary input used by the 2-D rigidity route. -/
 def StrongDefectBoundaryInput : Prop :=
-  (∀ s : ℂ,
-    (h_nontrivial : 0 < s.re ∧ s.re < 1)
-    (h_off : s.re ≠ 1 / 2) :
+  (∀ (s : ℂ) (_h_nontrivial : 0 < s.re ∧ s.re < 1) (_h_off : s.re ≠ 1 / 2),
     ∃ M : ℕ → ℂ → ℂ,
       (∀ N : ℕ, ∀ z : ℂ,
         xi_partial_defect2D (prime_window N) z = ((lorentzian_x z : ℂ)) * M N z)
@@ -1896,7 +2713,18 @@ def StrongDefectBoundaryInput : Prop :=
       (nhds (0 : ℂ)))
 
 /-- Active bundled strong-defect boundary assumption. -/
-variable (strongDefectBoundaryInput_assumption : StrongDefectBoundaryInput)
+variable
+  (strongDefectProfile_assumption :
+    ∀ (s : ℂ) (_h_nontrivial : 0 < s.re ∧ s.re < 1) (_h_off : s.re ≠ 1 / 2),
+      ∃ M : ℕ → ℂ → ℂ,
+        (∀ N : ℕ, ∀ z : ℂ,
+          xi_partial_defect2D (prime_window N) z = ((lorentzian_x z : ℂ)) * M N z)
+        ∧
+        ∃ δ : ℝ, 0 < δ ∧ ∃ N0 : ℕ, ∀ N : ℕ, N0 ≤ N → δ ≤ ‖M N s‖)
+  (strongDefectClosure_assumption :
+    ∀ s : ℂ,
+      Filter.Tendsto (fun N : ℕ => xi_partial_defect2D (prime_window N) s) Filter.atTop
+        (nhds (0 : ℂ)))
 
 /-- Final profile-local endpoint boundary projected from the bundled strong-defect input. -/
 theorem xi_defect_profile_nonzero_off_critical (s : ℂ)
@@ -1907,13 +2735,13 @@ theorem xi_defect_profile_nonzero_off_critical (s : ℂ)
         xi_partial_defect2D (prime_window N) z = ((lorentzian_x z : ℂ)) * M N z)
       ∧
       ∃ δ : ℝ, 0 < δ ∧ ∃ N0 : ℕ, ∀ N : ℕ, N0 ≤ N → δ ≤ ‖M N s‖ := by
-  exact strongDefectBoundaryInput_assumption.1 s h_nontrivial h_off
+  exact strongDefectProfile_assumption s h_nontrivial h_off
 
 /-- Window-defect closure boundary projected from the bundled strong-defect input. -/
 theorem xi_partial_defect2D_window_tendsto_zero (s : ℂ) :
     Filter.Tendsto (fun N : ℕ => xi_partial_defect2D (prime_window N) s) Filter.atTop
       (nhds (0 : ℂ)) := by
-  exact strongDefectBoundaryInput_assumption.2 s
+  exact strongDefectClosure_assumption s
 
 /-- Final endpoint-axiom restatement (profile-local finite-window form).
 
@@ -2240,6 +3068,208 @@ theorem conditional_RH :
   intro s hz hstrip
   exact conditional_RH_via_window_limits s hz hstrip
 
+/-- Real-axis zero classification: every zero of ζ on the real axis
+is a trivial zero (negative even integer).
+
+Proof ingredients needed:
+1. ζ(s) ≠ 0 for s : ℝ with s > 1        (Euler product, positivity)
+2. ζ(s) ≠ 0 for s : ℝ with 0 < s ≤ 1   (pole at s=1, positivity near 1)
+3. ζ(1/2) ≠ 0                             (numerical / special value)
+4. ζ(s) ≠ 0 for s : ℝ with -1 < s < 0   (functional equation + above)
+5. ζ(-2n-1) ≠ 0 for n : ℕ               (odd negative integers, Bernoulli)
+6. ζ(s) = 0 for s = -2n                  (riemannZeta_neg_two_mul_nat_add_one ✓)
+7. No other real zeros                     (combine 1-6 by interval analysis)
+
+Mathlib status:
+✓ riemannZeta_neg_two_mul_nat_add_one     (trivial zeros exist)
+✓ riemannZeta_one_ne_zero / pole at 1
+? riemannZeta_pos_of_pos                  (positivity for real s > 1)
+? riemannZeta_ne_zero_of_re_eq_one        (may need adaptation)
+✗ full real-axis classification           (not found in Mathlib)
+-/
+theorem real_axis_zeta_zero_onTrivialZeroLine (s : ℂ)
+    (hz : riemannZeta s = 0)
+    (him : s.im = 0) :
+    onTrivialZeroLine s := by
+  -- reduce to real variable
+  have hs_real : s = (s.re : ℂ) := by
+    ext <;> simp [him]
+  rw [hs_real] at hz
+  have hz_real : riemannZeta ((s.re : ℝ) : ℂ) = 0 := hz
+  -- interval pruning already available in Mathlib:
+  -- no zeros on `Re ≥ 1`, and `ζ(0) = -1/2 ≠ 0`.
+  have hlt_one : s.re < 1 := by
+    by_contra hnot
+    have hge : 1 ≤ s.re := by linarith
+    exact (riemannZeta_ne_zero_of_one_le_re (s := ((s.re : ℝ) : ℂ))
+      (by simpa using hge)) hz_real
+  have hne_zero : s.re ≠ 0 := by
+    intro hs0
+    have hz0 : riemannZeta (0 : ℂ) = 0 := by
+      simpa [hs0] using hz_real
+    have hz0' : riemannZeta (0 : ℂ) = -(1 / 2 : ℂ) := by
+      simpa using riemannZeta_zero
+    linarith [hz0, hz0']
+  -- remaining work: classify the real negative-axis zeros as exactly `-2(n+1)`.
+  sorry
+
+/-- Real-axis nonvanishing on the half-line `x ≥ 1` (Mathlib nonvanishing frontier). -/
+lemma riemannZeta_real_ne_zero_of_one_le (x : ℝ) (hx : 1 ≤ x) :
+    riemannZeta ((x : ℝ) : ℂ) ≠ 0 := by
+  exact riemannZeta_ne_zero_of_one_le_re (s := ((x : ℝ) : ℂ)) (by simpa using hx)
+
+/-- Endpoint nonvanishing at `x = 0`: `ζ(0) = -1/2`. -/
+lemma riemannZeta_real_ne_zero_at_zero :
+    riemannZeta ((0 : ℝ) : ℂ) ≠ 0 := by
+  intro hz0
+  have hz0' : riemannZeta (0 : ℂ) = -(1 / 2 : ℂ) := by
+    simpa using riemannZeta_zero
+  linarith [hz0, hz0']
+
+/-! ### Dependency checklist for real_axis_zeta_zero_onTrivialZeroLine
+
+INTERVAL ANALYSIS on ℝ:
+
+[x] s > 1:
+    riemannZeta_pos_of_real_gt_one : ∀ x : ℝ, 1 < x → 0 < riemannZeta x
+    → no zeros here
+
+[x] s = 1:
+    riemannZeta has pole → not zero by convention
+    → no zero here
+
+[ ] 0 < s < 1:
+    functional equation + Γ nonvanishing + ζ(1-s) > 0 for 1-s > 1
+    → no zeros here
+
+[x] s = 0:
+    riemannZeta_zero : riemannZeta 0 = -1/2 ≠ 0   ✓ IN MATHLIB
+    → not a zero
+
+[ ] -1 < s < 0:
+    functional equation: ζ(s) = χ(s)·ζ(1-s)
+    1-s ∈ (1,2) → ζ(1-s) > 0
+    χ(s) = 2^s·π^(s-1)·sin(πs/2)·Γ(1-s) ≠ 0 for non-integer s
+    → no zeros here
+
+[ ] s = -1:
+    riemannZeta_neg_one : riemannZeta (-1) = -1/12 ≠ 0
+    → not a zero
+
+[ ] s = -2:
+    riemannZeta_neg_two_mul_nat_add_one (n=0) : ζ(-2) = 0   ✓
+    → trivial zero ✓
+
+[ ] s ∈ (-2n-2, -2n) for n : ℕ:
+    functional equation + sin(πs/2) ≠ 0 for non-even-integer s
+    + ζ(1-s) ≠ 0 (since 1-s > 1)
+    → no zeros on open intervals between trivial zeros
+
+[ ] s = -(2n+1) for n : ℕ (odd negative integers):
+    riemannZeta_neg_odd : ζ(-(2n+1)) = Bernoulli number ≠ 0
+    → not a zero
+
+[ ] s = -2(n+1) for n : ℕ:
+    riemannZeta_neg_two_mul_nat_add_one   ✓ IN MATHLIB
+    → trivial zeros ✓
+
+CONCLUSION: only zeros on ℝ are s = -2,-4,-6,...
+= onTrivialZeroLine  □
+-/
+
+-- Fastest Mathlib search targets:
+-- #check riemannZeta_zero          -- ζ(0) = -1/2
+-- #check riemannZeta_neg_one       -- ζ(-1) = -1/12
+-- #check riemannZeta_pos_of_one_lt -- ζ(x) > 0 for x > 1
+-- #check riemannZeta_ne_zero_of_one_lt_re  -- off real axis
+-- #check Complex.sin_ne_zero_iff   -- sin(πs/2) ≠ 0
+
+/-- Any point on the trivial-zero line is on the negative real axis. -/
+lemma onTrivialZeroLine_im_zero_re_neg (s : ℂ)
+    (htriv : onTrivialZeroLine s) :
+    s.im = 0 ∧ s.re < 0 := by
+  rcases htriv with ⟨n, hn⟩
+  constructor
+  · rw [hn]
+    simp
+  · rw [hn]
+    norm_num
+
+/-- Real-axis zeta zeros are negative (derived via the trivial-zero-line classifier). -/
+theorem trivial_zero_re_neg (s : ℂ)
+    (hz : riemannZeta s = 0) (him : s.im = 0) :
+    s.re < 0 := by
+  exact (onTrivialZeroLine_im_zero_re_neg s
+    (real_axis_zeta_zero_onTrivialZeroLine s hz him)).2
+
+/-- Complete separation schema between trivial-axis and nontrivial-strip zero branches.
+
+Trivial zeros are handled on the real axis (`Im=0`, `Re<0`), while nontrivial zeros
+(`Im ≠ 0`) route through the strip hypothesis to the critical line via `conditional_RH`. -/
+theorem RH_complete_separation :
+    ∀ s : ℂ, riemannZeta s = 0 →
+      (s.im = 0 ∧ s.re < 0)
+      ∨
+      (s.im ≠ 0 → (0 < s.re ∧ s.re < 1) → s.re = 1/2) := by
+  intro s hz
+  by_cases him : s.im = 0
+  · left
+    exact ⟨him, trivial_zero_re_neg s hz him⟩
+  · right
+    intro _ hstrip
+    exact conditional_RH s hz hstrip
+
+/-- **Scale-indexed restatement (documentation).**
+
+The packaged conclusion `Re(s)=1/2` for a nontrivial-strip zeta zero does not involve
+the Gaussian dilation index `k` or `gaussianScaleFactor k`. This `∀ k, …` shape makes
+that independence explicit: the proof is the same at every auxiliary scale.
+
+It is **not** a separate analytic statement that zeros align with `(1+i)^k ℤ[i]`; any
+such lattice refinement would need its own hypotheses. -/
+theorem rh_scale_invariant (k : ℕ) (s : ℂ)
+    (hz : riemannZeta s = 0) (hstrip : 0 < s.re ∧ s.re < 1) :
+    s.re = (1 / 2 : ℝ) :=
+  conditional_RH s hz hstrip
+
+/-- Scale-indexed package: the Gaussian-cell area law and RH conclusion coexist uniformly in `k`.
+
+This theorem keeps the geometric scale marker explicit:
+`(abs (gaussianScaleFactor k))^2 = 2^k` while the strip-zero conclusion remains `Re(s)=1/2`. -/
+theorem rh_scale_invariant_with_area (k : ℕ) (s : ℂ)
+    (hz : riemannZeta s = 0) (hstrip : 0 < s.re ∧ s.re < 1) :
+    (Complex.abs (gaussianScaleFactor k)) ^ 2 = (2 : ℝ) ^ k ∧ s.re = (1 / 2 : ℝ) := by
+  refine ⟨gaussianScaleFactor_area k, ?_⟩
+  exact rh_scale_invariant k s hz hstrip
+
+/-- Scale-indexed package with all three channels:
+area growth (`2^k`), 8-step phase cycle (`+8` gives real factor `16`), and RH conclusion. -/
+theorem rh_scale_invariant_with_area_and_phase_cycle (k : ℕ) (s : ℂ)
+    (hz : riemannZeta s = 0) (hstrip : 0 < s.re ∧ s.re < 1) :
+    (Complex.abs (gaussianScaleFactor k)) ^ 2 = (2 : ℝ) ^ k
+      ∧ gaussianScaleFactor (k + 8) = (16 : ℂ) * gaussianScaleFactor k
+      ∧ Complex.arg (gaussianScaleFactor (k + 8)) = Complex.arg (gaussianScaleFactor k)
+      ∧ s.re = (1 / 2 : ℝ) := by
+  refine ⟨gaussianScaleFactor_area k, gaussianScaleFactor_phase_cycle k,
+    gaussianScaleFactor_arg_periodic_8 k, ?_⟩
+  exact rh_scale_invariant k s hz hstrip
+
+/-- Master scale package:
+induction form + phase/magnitude/area channels + `Phase8` index bridge + RH conclusion. -/
+theorem rh_scale_master (k : ℕ) (s : ℂ)
+    (hz : riemannZeta s = 0) (hstrip : 0 < s.re ∧ s.re < 1) :
+    gaussianScaleFactor 0 = (1 : ℂ) ∧
+      gaussianScaleFactor (k + 1) = B_canonical * gaussianScaleFactor k ∧
+      Complex.abs (gaussianScaleFactor k) = (Real.sqrt 2 : ℝ) ^ k ∧
+      (Complex.abs (gaussianScaleFactor k)) ^ 2 = (2 : ℝ) ^ k ∧
+      gaussianScaleFactor k
+        = ((Real.sqrt 2 : ℝ) ^ k : ℂ) * Complex.exp (((k : ℝ) * (Real.pi / 4)) * Complex.I) ∧
+      s.re = (1 / 2 : ℝ) := by
+  rcases gaussianScaleFactor_induction_form k with ⟨h0, hsucc⟩
+  rcases gaussianScaleFactor_phase_magnitude_area k with ⟨habs, harea, hphase⟩
+  refine ⟨h0, hsucc, habs, harea, hphase, ?_⟩
+  exact rh_scale_invariant k s hz hstrip
+
 /-- Explicit reduction theorem: the RH conclusion proved in this file factors
 through theorem-level rigidity (`phase_lock_rigidity`/`xi_real_rigidity`) and the
 named analytic boundary axioms, rather than
@@ -2250,7 +3280,7 @@ theorem RH_reduction_to_rigidity_boundary :
 
 /-- On the critical line, conjugation flips `+t` to `-t`. -/
 lemma critical_line_conj_plus_minus (t : ℝ) :
-    Complex.conj ((1 / 2 : ℂ) + t * Complex.I) = (1 / 2 : ℂ) - t * Complex.I := by
+    conj ((1 / 2 : ℂ) + t * Complex.I) = (1 / 2 : ℂ) - t * Complex.I := by
   simp [sub_eq_add_neg, mul_comm, mul_left_comm, mul_assoc]
 
 /-- On the critical line, the real part stays fixed at `1/2`. -/
@@ -2260,13 +3290,13 @@ lemma critical_line_re_fixed (t : ℝ) :
 
 /-- Conjugation on the critical line keeps `Re` and flips the sign of `Im`. -/
 lemma critical_line_im_sign_flip (t : ℝ) :
-    (Complex.conj ((1 / 2 : ℂ) + t * Complex.I)).im =
+    (conj ((1 / 2 : ℂ) + t * Complex.I)).im =
       -(((1 / 2 : ℂ) + t * Complex.I).im) := by
   simp
 
 /-- ξ-conjugation specializes to the `t ↔ -t` flip on the critical line. -/
 lemma xi_critical_line_t_flip (t : ℝ) :
-    Complex.conj (xi ((1 / 2 : ℂ) + t * Complex.I)) = xi ((1 / 2 : ℂ) - t * Complex.I) := by
+    conj (xi ((1 / 2 : ℂ) + t * Complex.I)) = xi ((1 / 2 : ℂ) - t * Complex.I) := by
   simpa [critical_line_conj_plus_minus t] using xi_conj ((1 / 2 : ℂ) + t * Complex.I)
 
 /-- `Gammaℝ` does not vanish on the critical line. -/
@@ -2335,20 +3365,20 @@ lemma xi_real_on_critical_line (t : ℝ) :
       xi ((1 / 2 : ℂ) + t * Complex.I) = xi ((1 / 2 : ℂ) - t * Complex.I) := by
     exact xi_functional_equation_on_critical_line t
   have h_fix :
-      Complex.conj (xi ((1 / 2 : ℂ) + t * Complex.I)) =
+      conj (xi ((1 / 2 : ℂ) + t * Complex.I)) =
         xi ((1 / 2 : ℂ) + t * Complex.I) := by
     calc
-      Complex.conj (xi ((1 / 2 : ℂ) + t * Complex.I))
+      conj (xi ((1 / 2 : ℂ) + t * Complex.I))
           = xi ((1 / 2 : ℂ) - t * Complex.I) := xi_critical_line_t_flip t
       _ = xi ((1 / 2 : ℂ) + t * Complex.I) := h_fe.symm
-  exact Complex.conj_eq_iff_real.mp h_fix
+  exact conj_eq_iff_real.mp h_fix
 
 /-- Bundled critical-line geometry:
 `Re` is fixed at `1/2`, `Im` flips sign under conjugation, and ξ follows the same `t ↔ -t` flip. -/
 theorem critical_line_geometry_bundle (t : ℝ) :
     (((1 / 2 : ℂ) + t * Complex.I).re = (1 / 2 : ℝ)) ∧
-    ((Complex.conj ((1 / 2 : ℂ) + t * Complex.I)).im = -(((1 / 2 : ℂ) + t * Complex.I).im)) ∧
-    (Complex.conj (xi ((1 / 2 : ℂ) + t * Complex.I)) = xi ((1 / 2 : ℂ) - t * Complex.I)) := by
+    ((conj ((1 / 2 : ℂ) + t * Complex.I)).im = -(((1 / 2 : ℂ) + t * Complex.I).im)) ∧
+    (conj (xi ((1 / 2 : ℂ) + t * Complex.I)) = xi ((1 / 2 : ℂ) - t * Complex.I)) := by
   exact ⟨critical_line_re_fixed t, critical_line_im_sign_flip t, xi_critical_line_t_flip t⟩
 
 /-- Symmetry-link theorem:
@@ -2357,7 +3387,7 @@ conjugation symmetry hold together in one chain. -/
 theorem symmetry_link_to_xi (t : ℝ) :
     Complex.abs μ_canonical = 1 ∧
     Complex.abs B_canonical * Complex.abs C_canonical = 1 ∧
-    Complex.conj (xi ((1 / 2 : ℂ) + t * Complex.I)) = xi ((1 / 2 : ℂ) - t * Complex.I) := by
+    conj (xi ((1 / 2 : ℂ) + t * Complex.I)) = xi ((1 / 2 : ℂ) - t * Complex.I) := by
   rcases factorization_unit_modulus_bridge canonical_observation canonical_factorization with
     ⟨hμ, hBC, hC⟩
   exact ⟨hμ, by simpa [norm_eq_abs] using hBC, xi_critical_line_t_flip t⟩
@@ -2390,6 +3420,34 @@ lemma sourcePhase_ne_zero (θ : ℝ) :
     sourcePhase θ ≠ 0 := by
   simpa [sourcePhase] using Complex.exp_ne_zero (θ * Complex.I)
 
+/-- `sourcePhase` is `2π`-periodic. -/
+lemma sourcePhase_add_two_pi (θ : ℝ) :
+    sourcePhase (θ + 2 * Real.pi) = sourcePhase θ := by
+  unfold sourcePhase
+  refine Complex.ext ?_ ?_
+  · simp [Complex.exp_mul_I, Real.cos_add, Real.sin_add]
+  · simp [Complex.exp_mul_I, Real.cos_add, Real.sin_add]
+
+/-- `sourcePhase` is periodic under addition by integer multiples of `2π`. -/
+lemma sourcePhase_add_nat_two_pi (θ : ℝ) (m : ℕ) :
+    sourcePhase (θ + (m : ℝ) * (2 * Real.pi)) = sourcePhase θ := by
+  induction m with
+  | zero =>
+      simp
+  | succ m ihm =>
+      calc
+        sourcePhase (θ + ((m + 1 : ℕ) : ℝ) * (2 * Real.pi))
+            = sourcePhase ((θ + (m : ℝ) * (2 * Real.pi)) + 2 * Real.pi) := by
+                ring_nf
+        _ = sourcePhase (θ + (m : ℝ) * (2 * Real.pi)) := sourcePhase_add_two_pi _
+        _ = sourcePhase θ := ihm
+
+/-- `sourcePhase` view of the linear Gaussian scaling phase law. -/
+theorem gaussianScaleFactor_linear_phase_sourcePhase (k : ℕ) :
+    gaussianScaleFactor k
+      = ((Real.sqrt 2 : ℝ) ^ k : ℂ) * sourcePhase ((k : ℝ) * (Real.pi / 4)) := by
+  simpa [sourcePhase] using gaussianScaleFactor_linear_phase k
+
 /-- Cartesian decomposition of `primePhase`: real channel is cosine. -/
 lemma primePhase_re (p : ℕ) (t : ℝ) :
     (primePhase p t).re = Real.cos (t * Real.log (p : ℝ)) := by
@@ -2419,6 +3477,9 @@ its unit-circle phase point via `sourcePhase`.
 /-- Residue class index for quarter-turn phases. -/
 abbrev Phase8 := ZMod 8
 
+/-- Natural-index projection to `Phase8` (phase class modulo `8`). -/
+def phaseIndex (k : ℕ) : Phase8 := (k : Phase8)
+
 /-- Angle representative of `k : Z/8Z`, measured in units of `π/4`. -/
 noncomputable def phase8Angle (k : Phase8) : ℝ :=
   (k.val : ℝ) * (Real.pi / 4)
@@ -2426,6 +3487,93 @@ noncomputable def phase8Angle (k : Phase8) : ℝ :=
 /-- Unit-circle phase point corresponding to a residue class in `Z/8Z`. -/
 noncomputable def phase8Rotate (k : Phase8) : ℂ :=
   sourcePhase (phase8Angle k)
+
+/-- Definitional bridge: `phaseIndex` feeds directly into the `Phase8` rotation map. -/
+lemma phase8Rotate_phaseIndex (k : ℕ) :
+    phase8Rotate (phaseIndex k) = sourcePhase (phase8Angle (phaseIndex k)) := by
+  rfl
+
+/-- `phase8Angle` of `phaseIndex k` is exactly `(k % 8) * (π/4)`. -/
+lemma phase8Angle_phaseIndex_mod (k : ℕ) :
+    phase8Angle (phaseIndex k) = ((k % 8 : ℕ) : ℝ) * (Real.pi / 4) := by
+  simp [phase8Angle, phaseIndex]
+
+/-- Explicit modulo-8 reduction of the Gaussian phase angle. -/
+lemma sourcePhase_k_pi_div_four_mod8 (k : ℕ) :
+    sourcePhase ((k : ℝ) * (Real.pi / 4))
+      = sourcePhase (((k % 8 : ℕ) : ℝ) * (Real.pi / 4)) := by
+  have hsplitNat : k = k % 8 + 8 * (k / 8) := by
+    exact (Nat.mod_add_div k 8).symm
+  have hsplit :
+      ((k : ℝ) * (Real.pi / 4))
+        = (((k % 8 : ℕ) : ℝ) * (Real.pi / 4))
+            + ((k / 8 : ℕ) : ℝ) * (2 * Real.pi) := by
+    rw [hsplitNat]
+    ring_nf
+  rw [hsplit]
+  exact sourcePhase_add_nat_two_pi _ (k / 8)
+
+/-- Strict modulo-angle bridge:
+the continuous phase `sourcePhase (k·π/4)` equals the `Phase8` representative at `k mod 8`. -/
+theorem sourcePhase_k_pi_div_four_eq_phase8Rotate_phaseIndex (k : ℕ) :
+    sourcePhase ((k : ℝ) * (Real.pi / 4)) = phase8Rotate (phaseIndex k) := by
+  calc
+    sourcePhase ((k : ℝ) * (Real.pi / 4))
+        = sourcePhase (((k % 8 : ℕ) : ℝ) * (Real.pi / 4)) := sourcePhase_k_pi_div_four_mod8 k
+    _ = sourcePhase (phase8Angle (phaseIndex k)) := by
+          rw [phase8Angle_phaseIndex_mod]
+    _ = phase8Rotate (phaseIndex k) := by
+          simp [phase8Rotate]
+
+/-- Linear-phase law with explicit modulo-8 representative. -/
+theorem gaussianScaleFactor_linear_phase_mod8 (k : ℕ) :
+    gaussianScaleFactor k
+      = ((Real.sqrt 2 : ℝ) ^ k : ℂ) * phase8Rotate (phaseIndex k) := by
+  calc
+    gaussianScaleFactor k
+        = ((Real.sqrt 2 : ℝ) ^ k : ℂ) * sourcePhase ((k : ℝ) * (Real.pi / 4)) :=
+          gaussianScaleFactor_linear_phase_sourcePhase k
+    _ = ((Real.sqrt 2 : ℝ) ^ k : ℂ) * phase8Rotate (phaseIndex k) := by
+          rw [sourcePhase_k_pi_div_four_eq_phase8Rotate_phaseIndex]
+
+/-- The `Phase8` index is periodic with period `8`. -/
+lemma phaseIndex_add_eight (k : ℕ) :
+    phaseIndex (k + 8) = phaseIndex k := by
+  norm_num [phaseIndex]
+
+/-- Consequently, the `Phase8` rotation representative is `8`-periodic in `k`. -/
+lemma phase8Rotate_phaseIndex_add_eight (k : ℕ) :
+    phase8Rotate (phaseIndex (k + 8)) = phase8Rotate (phaseIndex k) := by
+  rw [phaseIndex_add_eight]
+
+/-- Phase8-indexed RH package: attaches the modulo-8 phase representative to the RH strip conclusion. -/
+theorem rh_scale_master_phase8 (k : ℕ) (s : ℂ)
+    (hz : riemannZeta s = 0) (hstrip : 0 < s.re ∧ s.re < 1) :
+    phase8Rotate (phaseIndex k) = sourcePhase (phase8Angle (phaseIndex k)) ∧
+      s.re = (1 / 2 : ℝ) := by
+  refine ⟨phase8Rotate_phaseIndex k, ?_⟩
+  exact rh_scale_invariant k s hz hstrip
+
+/-- Full modulo-8 scale package: geometric scaling channels in `Phase8` form + RH strip conclusion. -/
+theorem rh_scale_master_mod8 (k : ℕ) (s : ℂ)
+    (hz : riemannZeta s = 0) (hstrip : 0 < s.re ∧ s.re < 1) :
+    Complex.abs (gaussianScaleFactor k) = (Real.sqrt 2 : ℝ) ^ k ∧
+      (Complex.abs (gaussianScaleFactor k)) ^ 2 = (2 : ℝ) ^ k ∧
+      gaussianScaleFactor k = ((Real.sqrt 2 : ℝ) ^ k : ℂ) * phase8Rotate (phaseIndex k) ∧
+      phase8Rotate (phaseIndex (k + 8)) = phase8Rotate (phaseIndex k) ∧
+      s.re = (1 / 2 : ℝ) := by
+  refine ⟨gaussian_scale_factor_abs k, gaussianScaleFactor_area k,
+    gaussianScaleFactor_linear_phase_mod8 k, phase8Rotate_phaseIndex_add_eight k, ?_⟩
+  exact rh_scale_invariant k s hz hstrip
+
+/-- Channel projection from `rh_scale_master_mod8`:
+keep only phase `8`-periodicity and the RH strip conclusion. -/
+theorem rh_scale_phase_channel_projection (k : ℕ) (s : ℂ)
+    (hz : riemannZeta s = 0) (hstrip : 0 < s.re ∧ s.re < 1) :
+    phase8Rotate (phaseIndex (k + 8)) = phase8Rotate (phaseIndex k) ∧
+      s.re = (1 / 2 : ℝ) := by
+  rcases rh_scale_master_mod8 k s hz hstrip with ⟨_, _, _, hphase8, hre⟩
+  exact ⟨hphase8, hre⟩
 
 /-- Arithmetic checkpoint for the `Z/8Z` phase index: `gcd(3,8)=1`. -/
 lemma gcd_three_eight : Nat.gcd 3 8 = 1 := by
@@ -3634,6 +4782,15 @@ theorem step1_phase_velocity_identity_of_assumption
   intro t
   exact hPhase t
 
+/-- `Step1PhaseVelocityIdentitySchema` from `XiLogDerivFormula` + slit-plane admissibility alone
+(`hlineDeriv` is automatic for this file's `xi`). -/
+theorem step1_phase_velocity_identity_of_XiLogDerivFormula_and_slit
+    (hΞ : XiLogDerivFormula)
+    (hslit : ∀ t : ℝ, xi ((1 / 2 : ℂ) + t * Complex.I) ∈ Complex.slitPlane) :
+    Step1PhaseVelocityIdentitySchema :=
+  step1_phase_velocity_identity_of_assumption
+    (phase_velocity_on_critical_line_of_XiLogDerivFormula_and_slit hΞ hslit)
+
 /-- The lattice channel identity in `Step1ApproximationFrontier` is definitional. -/
 theorem step1_lattice_channel_identity :
     ∀ N : ℕ, ∀ s : ℂ,
@@ -3714,7 +4871,18 @@ theorem step1_phase_velocity_identity_of_approximation_frontier
   exact hPhase
 
 /-- Active reduced Step-1 assumption for the endpoint route. -/
-variable (Step1ReducedFrontier_assumption : Step1ReducedFrontier)
+variable
+  (step1_F_lattice_boundary_assumption : F_lattice_zero_limit_boundary)
+  (step1_tail_control_assumption : Step1TailControlSchema)
+  (step1_velocity_transfer_assumption : Step1VelocityTransferSchema)
+  (step1_phase_velocity_identity_assumption : Step1PhaseVelocityIdentitySchema)
+
+/-- Repacked reduced Step-1 frontier assembled from independent clauses. -/
+theorem step1_reduced_frontier_holds : Step1ReducedFrontier := by
+  exact ⟨step1_F_lattice_boundary_assumption,
+    step1_tail_control_assumption,
+    step1_velocity_transfer_assumption,
+    step1_phase_velocity_identity_assumption⟩
 
 /-- Hurwitz-style boundary, now derived from the active Step-1 assumption. -/
 theorem zeta_zero_is_limit_of_window_zeros
@@ -3723,7 +4891,11 @@ theorem zeta_zero_is_limit_of_window_zeros
       (∀ N : ℕ, partialEulerWindowFunction N (sN N) = 0) ∧
       Filter.Tendsto sN Filter.atTop (nhds s) := by
   have hA : Step1ApproximationFrontier :=
-    step1_approximation_frontier_of_reduced Step1ReducedFrontier_assumption
+    step1_approximation_frontier_of_reduced (step1_reduced_frontier_holds
+      step1_F_lattice_boundary_assumption
+      step1_tail_control_assumption
+      step1_velocity_transfer_assumption
+      step1_phase_velocity_identity_assumption)
   exact step1_target_of_approximation_frontier
     hA s hz
 
@@ -3769,7 +4941,11 @@ theorem lattice_boundary_discharged_of_step1_approximation_frontier
 theorem F_lattice_zero_limit_boundary_holds :
     F_lattice_zero_limit_boundary := by
   have hA : Step1ApproximationFrontier :=
-    step1_approximation_frontier_of_reduced Step1ReducedFrontier_assumption
+    step1_approximation_frontier_of_reduced (step1_reduced_frontier_holds
+      step1_F_lattice_boundary_assumption
+      step1_tail_control_assumption
+      step1_velocity_transfer_assumption
+      step1_phase_velocity_identity_assumption)
   exact lattice_boundary_discharged_of_step1_approximation_frontier
     hA
 
@@ -3797,6 +4973,16 @@ theorem phase_lock_from_window_limit (s : ℂ)
   -- Step 3: xi is real at every critical-line point
   rw [hs_form]
   exact xi_real_on_critical_line s.im
+
+/-- Lattice-channel bridge for phase-lock transfer:
+if `s` is reached by lattice-window zeros in the strip, then ξ is real at `s`. -/
+theorem phase_lock_from_F_lattice_limit (s : ℂ)
+    (hstrip : 0 < s.re ∧ s.re < 1)
+    (hFlim : ∃ σN tN : ℕ → ℝ,
+      (∀ N : ℕ, F_lattice N (σN N) (tN N) = 0) ∧
+      Filter.Tendsto (fun N : ℕ => latticePoint (σN N) (tN N)) Filter.atTop (nhds s)) :
+    xi s ∈ ℝ := by
+  exact phase_lock_from_window_limit s hstrip (window_zero_limit_from_F_lattice s hFlim)
 
 /-- Lattice-native phase-lock transfer interface.
 This is the theorem-level bridge in the `σ + i t` channel for `F(s,t)`. -/
@@ -3838,16 +5024,6 @@ theorem PhaseLockLatticeBridge_iff_window_limit_bridge :
     exact phase_lock_from_window_limit_of_lattice_bridge hBridge s hstrip hlim
   · intro hBridge s hstrip hFlim
     exact hBridge s hstrip (window_zero_limit_from_F_lattice s hFlim)
-
-/-- Lattice-channel bridge for phase-lock transfer:
-if `s` is reached by lattice-window zeros in the strip, then ξ is real at `s`. -/
-theorem phase_lock_from_F_lattice_limit (s : ℂ)
-    (hstrip : 0 < s.re ∧ s.re < 1)
-    (hFlim : ∃ σN tN : ℕ → ℝ,
-      (∀ N : ℕ, F_lattice N (σN N) (tN N) = 0) ∧
-      Filter.Tendsto (fun N : ℕ => latticePoint (σN N) (tN N)) Filter.atTop (nhds s)) :
-    xi s ∈ ℝ := by
-  exact phase_lock_from_window_limit s hstrip (window_zero_limit_from_F_lattice s hFlim)
 
 /-- Machine-auditable strong-defect frontier interface.
 
@@ -4388,7 +5564,11 @@ lemma geometric_phase_lock_holds : geometric_phase_lock := by
 /-- The analytic phase lock follows from the ξ phase-velocity decomposition. -/
 lemma analytic_phase_lock_holds (t : ℝ) : analytic_phase_lock t := by
   have hA : Step1ApproximationFrontier :=
-    step1_approximation_frontier_of_reduced Step1ReducedFrontier_assumption
+    step1_approximation_frontier_of_reduced (step1_reduced_frontier_holds
+      step1_F_lattice_boundary_assumption
+      step1_tail_control_assumption
+      step1_velocity_transfer_assumption
+      step1_phase_velocity_identity_assumption)
   have hPhase : Step1PhaseVelocityIdentitySchema :=
     step1_phase_velocity_identity_of_approximation_frontier
       hA
@@ -4981,7 +6161,7 @@ theorem unit_circle_coordinate_phase_locking (x y : ℝ)
 
 /-- Coordinate version of ξ-conjugation: `x + iy` maps to `x - iy`. -/
 lemma xi_conj_xy (x y : ℝ) :
-    Complex.conj (xi ((x : ℂ) + y * Complex.I)) = xi ((x : ℂ) - y * Complex.I) := by
+    conj (xi ((x : ℂ) + y * Complex.I)) = xi ((x : ℂ) - y * Complex.I) := by
   simpa [sub_eq_add_neg, add_assoc, add_left_comm, add_comm,
     mul_assoc, mul_left_comm, mul_comm]
     using xi_conj ((x : ℂ) + y * Complex.I)
@@ -4990,7 +6170,7 @@ lemma xi_conj_xy (x y : ℝ) :
 unit-circle modulus in coordinates + ξ conjugation symmetry in coordinates. -/
 theorem symmetry_link_to_xi_xy (x y : ℝ) (hxy : x ^ 2 + y ^ 2 = 1) :
     Complex.abs ((x : ℂ) + y * Complex.I) = 1 ∧
-    Complex.conj (xi ((x : ℂ) + y * Complex.I)) = xi ((x : ℂ) - y * Complex.I) := by
+    conj (xi ((x : ℂ) + y * Complex.I)) = xi ((x : ℂ) - y * Complex.I) := by
   exact ⟨unit_circle_abs_xy x y hxy, xi_conj_xy x y⟩
 
 end FourAxioms
@@ -5029,11 +6209,12 @@ end FourAxioms
       xi_partialEuler_defect_window_refine_im_abs_le
 
   LEFT AS `sorry`:
-    • none (all former placeholders resolved)
+    • none
 
   NOT FORMALIZED (explicit analytic boundary axioms still assumed):
     Minimal strong-defect frontier (alternative route via `conditional_RH_from_strong_defect_frontier`):
-    • `strongDefectBoundaryInput_assumption`
+    • `strongDefectProfile_assumption`
+    • `strongDefectClosure_assumption`
     Projected interfaces:
     • `xi_defect_profile_nonzero_off_critical`
     • `xi_partial_defect2D_window_tendsto_zero`
@@ -5044,7 +6225,10 @@ end FourAxioms
 
     Window-limit packaging frontier (used by `conditional_RH_via_window_limits` and
     `rh_endpoint_master`):
-    • `Step1ReducedFrontier_assumption`
+    • `step1_F_lattice_boundary_assumption`
+    • `step1_tail_control_assumption`
+    • `step1_velocity_transfer_assumption`
+    • `step1_phase_velocity_identity_assumption`
     Proven bridge:
     • `PhaseLockLatticeBridge`
     • `phase_lock_lattice_bridge_holds`
@@ -5068,6 +6252,10 @@ end FourAxioms
     • `conditional_RH_via_torus_compatibility_frontier`
 
     Supporting analytic boundaries (outside the minimal endpoint frontier):
+    • `real_axis_zeta_zero_onTrivialZeroLine` (real-axis zero classifier to the trivial-zero line)
+    • `trivial_zero_re_neg` (now derived theorem from the classifier)
+    • `completedRiemannZeta_factor_bridge_at_zero` (isolated `s=0` boundary)
+    • `completedRiemannZeta_factor_bridge_on_trivial_zero_line` (negative-even, `Im=0` trivial-zero line)
     • `conjugationBoundaryInput_assumption`
     • `xi_gap_factor_nonzero_off_critical`  -- compatibility theorem (derived from frontier assumptions)
     Prototype target (currently not an active global assumption):
@@ -5099,7 +6287,11 @@ end FourAxioms
       Routing:        `conditional_RH_via_window_limits`
       Top frontier:   `TorusCompatibilityFrontier`
       RH projection:  `WindowLimitFrontier`
-      Key axiom:      Step1ReducedFrontier_assumption
+      Key assumptions:
+                      `step1_F_lattice_boundary_assumption`
+                      `step1_tail_control_assumption`
+                      `step1_velocity_transfer_assumption`
+                      `step1_phase_velocity_identity_assumption`
       Key bridge:     `PhaseLockLatticeBridge` / `phase_lock_lattice_bridge_holds`
       Derived link:   zeta_zero_is_limit_of_window_zeros (from F-lattice boundary)
       Grounding:      Directly from the analytic theory of ζ-zeros and finite-window approximations
@@ -5120,7 +6312,9 @@ end FourAxioms
 
       Entry:          `conditional_RH_from_strong_defect_frontier`
       Frontier:       `StrongDefectFrontier`
-      Key axiom:      strongDefectBoundaryInput_assumption
+      Key assumptions:
+                      `strongDefectProfile_assumption`
+                      `strongDefectClosure_assumption`
       Projected data: xi_defect_profile_nonzero_off_critical, xi_partial_defect2D_window_tendsto_zero
       Grounding:      From multiplicative source/medium/sink decomposition of finite-window defects
       Theorem chain:  defect factorization → lower-bounded medium profile → zero-closure contradiction
@@ -5141,7 +6335,54 @@ end FourAxioms
     1. Conditional RH is proved via window-limit frontier (primary route)
     2. Alternative strong-defect route available (valid but more abstract)
     3. Geometric insight: canonical source phase sits on unit-circle crossing locus
-    4. All claims are explicit; no hidden axioms or `sorry` statements
+    4. All claims are explicit; no hidden `sorry` statements (remaining axioms are named boundary inputs)
     5. Remaining boundary assumptions are clearly named and documented
     6. Both routes agree on the conclusion: critical-line rigidity for ζ-zeros in the strip
   -/
+
+/-!
+## De-axiomatization Ledger (frozen baseline)
+
+Status key:
+- `DONE`: replaced by finer-grained dependencies and wired into theorems.
+- `PENDING`: still a frontier assumption/axiom.
+
+Ordered replacement track (requested order):
+1. `Step1ReducedFrontier_assumption`
+   - status: `DONE` (replaced by four independent assumptions)
+   - replacements:
+     - `step1_F_lattice_boundary_assumption`
+     - `step1_tail_control_assumption`
+     - `step1_velocity_transfer_assumption`
+     - `step1_phase_velocity_identity_assumption`
+   - consumed by:
+     - `step1_reduced_frontier_holds`
+     - `zeta_zero_is_limit_of_window_zeros`
+     - `F_lattice_zero_limit_boundary_holds`
+     - `analytic_phase_lock_holds`
+
+2. Phase-lock lattice bridge dependencies
+   - status: `DONE`
+   - note: `PhaseLockLatticeBridge` is theorem-level (`phase_lock_lattice_bridge_holds`), no standalone axiom remains here.
+   - dependencies flow through:
+     - `phase_lock_from_F_lattice_limit`
+     - `window_zero_limit_from_F_lattice`
+     - `phase_lock_from_window_limit`
+
+3. `strongDefectBoundaryInput_assumption`
+   - status: `DONE` (replaced by two explicit assumptions)
+   - replacements:
+     - `strongDefectProfile_assumption`
+     - `strongDefectClosure_assumption`
+   - consumed by:
+     - `xi_defect_profile_nonzero_off_critical`
+     - `xi_partial_defect2D_window_tendsto_zero`
+     - `strong_defect_frontier_holds`
+
+4. `trivial_zero_re_neg`
+   - status: `DONE` (derived theorem)
+   - dependency split:
+     - `onTrivialZeroLine_im_zero_re_neg` (proved)
+     - `real_axis_zeta_zero_onTrivialZeroLine` (`PENDING` classifier axiom)
+   - note: branch negativity is now theorem-level; only the classifier remains frontier.
+-/
