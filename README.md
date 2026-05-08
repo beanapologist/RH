@@ -6,6 +6,25 @@ This repository contains a Lean 4 / Mathlib formalization of a geometric reducti
 
 The current development does not claim an unconditional machine-checked proof of RH. Instead, it formalizes the geometric, factorization, symmetry, and endpoint packaging arguments, and reduces the RH conclusion to a small set of explicit analytic boundary axioms.
 
+## Current Endpoint (Audit-Synced)
+
+As of the latest architecture pass, the canonical top endpoint is split into:
+
+- `MajorRHGatewayBoundary` (hard gateway; definitional alias of `F_lattice_zero_limit_boundary`)
+- `SoftPipelineInputs` (soft analytic pipeline bundle)
+
+with closure theorem:
+
+- `conditional_RH_of_major_gateway_and_soft_pipeline`
+
+and equivalent one-bundle form:
+
+- `FinalUnresolvedInputs`
+- `conditional_RH_of_final_unresolved_inputs`
+- `FinalUnresolvedInputs_iff_major_gateway_and_soft_pipeline`
+
+This supersedes older documentation that listed many factor-target/nonvanishing assumptions directly at the final endpoint level.
+
 ## Architecture
 
 **Primary endpoint route (window-limit frontier):**
@@ -59,6 +78,9 @@ The canonical source factor **B = 1 + i** connects to the unit-circle crossing l
 - Unit-circle crossing locus characterization
 
 **Not Formalized (explicit boundary assumptions / stubs):**
+- **Canonical final unresolved interface (preferred):**
+  - `MajorRHGatewayBoundary`
+  - `SoftPipelineInputs`
 - **Window-limit frontier (active Step-1 split form):**
   - `step1_F_lattice_boundary_assumption`
   - `step1_tail_control_assumption`
@@ -68,9 +90,11 @@ The canonical source factor **B = 1 + i** connects to the unit-circle crossing l
   - `strongDefectProfile_assumption`
   - `strongDefectClosure_assumption`
 - **Real-axis classification:** `real_axis_zeta_zero_onTrivialZeroLine` is a **proved theorem** (no `sorry`).
-  Remaining analytic inputs bundled as explicit axioms:
-  - `riemannZeta_real_no_zero_in_Ioo_01` — no real zero of ζ on `(0,1)`
-  - `riemannZeta_ne_zero_at_neg_odd_nat` — ζ(-m) ≠ 0 for odd `m ≥ 1`
+  Remaining real-axis analytic input bundled as explicit axiom:
+  - `riemannZeta_half_numeric_certificate` — certified midpoint approximation (implies `ζ(1/2) ≠ 0`)
+  - `riemannZeta_real_no_zero_in_Ioo_01` is a **derived theorem** from strip rigidity +
+    `riemannZeta_ne_zero_at_half`
+  - `riemannZeta_ne_zero_at_neg_odd_nat` is now a **proved theorem**
 - **Projected interfaces:** `xi_defect_profile_nonzero_off_critical`, `xi_partial_defect2D_window_tendsto_zero`
 - **Supporting boundaries:** `conjugationBoundaryInput_assumption`
 - **Projected interface:** `completedHurwitzZetaEven_zero_conj_of_ne_zero`
@@ -88,6 +112,10 @@ To move from the current reduction to an unconditional theorem, the remaining wo
 
 Current checklist status: all interfaces are theorem-clean (no `sorry`), but endpoint closure is still conditional on explicit `variable` assumptions in `RH.lean`.
 
+Latest audit note:
+- The final endpoint bundle was tightened to avoid over-strong global nonvanishing assumptions (`∀ s, zeta s ≠ 0` style) at top level.
+- The preferred final route now uses `XiLogDerivFormula` directly in `SoftPipelineInputs` plus staged-tail + bridge inputs.
+
 Execution status notes:
 - Lattice-native closure routing is in place (`F(s,t)` boundary -> window zero limit -> phase-lock bridge -> RH endpoint).
 - `phase_lock_from_window_limit` is a theorem (no placeholder), but currently depends on strong-defect assumptions already declared in the file.
@@ -95,6 +123,8 @@ Execution status notes:
 - Step-1 landing interface is now explicit and non-alias: `Step1ApproximationFrontier` packages lattice zero-limit boundary + local epsilon-approximation at zeta zeros + zero-stability transfer (local capture -> convergent sequence extraction) + tail-control schema for window cores + velocity-transfer schema + lattice/window channel identity.
 - New bridge: `step1_tail_control_of_missingPrimeCore_cauchy_tail` connects `missingPrimeCore_cauchy_tail` into the Step-1 frontier.
 - New bridge: `step1_velocity_transfer_of_partialEulerPhaseVelocity_window_tendsto` connects `partialEulerPhaseVelocity_window_tendsto` into the Step-1 frontier.
+- New reduction wrapper: `step1_reduced_frontier_holds_of_XiLogDerivFormula_and_slit` discharges the named Step-1 phase clause from `XiLogDerivFormula + slit`.
+- New endpoint wrapper: `conditional_RH_via_window_limits_of_XiLogDerivFormula_and_slit` routes RH closure through that reduced phase-input interface.
 - `xi_logderiv_formula` and `conjugationBoundaryInput_assumption` remain high-value analytic discharge targets.
 
 Recommended order (dependency-first), now tracked as a checklist:
@@ -106,7 +136,8 @@ Recommended order (dependency-first), now tracked as a checklist:
 - [ ] `strongDefectProfile_assumption`
 - [ ] `strongDefectClosure_assumption`
 - [x] `real_axis_zeta_zero_onTrivialZeroLine` (proved; depends on one Mathlib-external analytic boundary below)
-- [ ] `riemannZeta_real_no_zero_in_Ioo_01` (still an axiom: not in Mathlib on the current pin)
+- [ ] `riemannZeta_half_numeric_certificate` (numeric bound at `s = 1/2`; `riemannZeta_ne_zero_at_half` is derived)
+- [x] `riemannZeta_real_no_zero_in_Ioo_01` (derived theorem: any strip real zero is forced to `x=1/2`)
 - [x] `riemannZeta_ne_zero_at_neg_odd_nat` (proved from `riemannZeta_neg_nat_eq_bernoulli` + even Bernoulli nonvanishing)
 - [ ] `xi_partial_defect2D_window_tendsto_zero` (projected interface from bundled input)
 - [ ] `xi_defect_profile_nonzero_off_critical` (projected interface from bundled input)
@@ -119,6 +150,66 @@ Recommended order (dependency-first), now tracked as a checklist:
 - [x] `completedRiemannZeta_conj` (derived globally from established conjugation lemmas)
 - [x] `xi_partial_defect2D_factor_boundary` (localized compatibility input; removed from active global assumptions)
 - [x] `phase_lock_shift_constant_11_over_8` (optional heuristic marker, now definitional)
+
+### Bernoulli trick proof map (`riemannZeta_ne_zero_at_neg_odd_nat`)
+
+Goal: for odd `m >= 1`, prove `riemannZeta (-(m : ℝ) : ℂ) ≠ 0`.
+
+1. Rewrite by special value at negative naturals:
+   `riemannZeta_neg_nat_eq_bernoulli` gives
+   `ζ(-m) = (-1)^m * bernoulli (m + 1) / (m + 1)`.
+2. Reduce to Bernoulli nonvanishing:
+   denominator `(m+1)` and factor `(-1)^m` are nonzero, so it suffices to show
+   `bernoulli (m+1) ≠ 0`.
+3. Use oddness:
+   from `m % 2 = 1`, obtain `m + 1 = 2 * k` with `k ≠ 0`, reducing to
+   `bernoulli (2 * k) ≠ 0`.
+4. Prove even Bernoulli nonvanishing by contradiction:
+   assume `bernoulli (2 * k) = 0`.
+5. Inject into positive-even zeta formula:
+   `riemannZeta_two_mul_nat` then forces `riemannZeta (2 * k : ℂ) = 0`.
+6. Contradict positivity on the real axis:
+   `riemannZeta_pos_of_one_lt` yields `0 < riemannZeta (2 * k : ℝ)`, hence
+   `riemannZeta (2 * k : ℂ) ≠ 0`.
+7. Conclude `bernoulli (2 * k) ≠ 0`, then back-substitute to get
+   `riemannZeta (-(m : ℝ) : ℂ) ≠ 0`.
+
+Net effect: odd negative real-axis nonvanishing is now Mathlib-native through
+`HurwitzZetaValues` + `Dirichlet` positivity. The open-interval boundary is no longer primitive:
+`riemannZeta_real_no_zero_in_Ioo_01` is derived from strip rigidity, leaving only the
+single-point boundary `riemannZeta_ne_zero_at_half` on the real axis.
+
+### Midpoint certificate contract (`riemannZeta_ne_zero_at_half`)
+
+`RH.lean` now factors midpoint nonvanishing through a numeric-certificate interface:
+
+- `riemannZeta_half_numeric_certificate` requires `∃ c ε : ℝ` such that
+  - `0 ≤ ε`
+  - `ε < |c|`
+  - `‖riemannZeta ((1/2 : ℝ) : ℂ) - (c : ℂ)‖ ≤ ε`
+- From this, `riemannZeta_ne_zero_at_half_of_numeric_certificate` proves
+  `riemannZeta ((1/2 : ℝ) : ℂ) ≠ 0`.
+- The exported theorem `riemannZeta_ne_zero_at_half` is now derived from that certificate.
+
+Interpretation: to fully discharge the last real-axis boundary, it is enough to provide one
+certified approximation bound at `s = 1/2` with error strictly smaller than the center magnitude.
+
+**Why this works (triangle inequality).**  
+Once you have `‖ζ(1/2) - c‖ ≤ ε` and `ε < |c|`, then `ζ(1/2) ≠ 0`: for example,
+`|c| ≤ ‖ζ(1/2) - c‖ + ‖ζ(1/2)‖` gives `‖ζ(1/2)‖ ≥ |c| - ε > 0`.  
+The proof in `RH.lean` uses the equivalent contradiction: if `ζ(1/2) = 0` then
+`‖c‖ ≤ ε`, contradicting `ε < |c|`.
+
+**Concrete target numbers (informal; not yet a Lean proof).**  
+Classically `ζ(1/2) ≈ -1.4603545…`. A certificate of the right *shape* might use e.g.
+`c = -1.46`, `ε = 0.01`, so `|c| = 1.46 > ε` and one would need only a **certified**
+bound `‖ζ(1/2) - (-1.46)‖ ≤ 0.01` in Lean. That last step is discharged by
+`riemannZeta_half_numeric_certificate` today; replacing the axiom requires either
+interval arithmetic, a native numeric evaluator trusted in proof, or another
+analytic lower bound on `|ζ(1/2)|`.
+
+**Checklist note:** the primitive real-axis input is now
+`riemannZeta_half_numeric_certificate`; `riemannZeta_ne_zero_at_half` is a derived theorem.
 
 **Milestone criterion:**
 - Airtight status in this repository is reached when all active `variable` assumptions in `RH.lean` that feed endpoint closure are replaced by theorem proofs.
@@ -140,9 +231,36 @@ Recommended order (dependency-first), now tracked as a checklist:
 
 **Key insight:** h = e^μ, coherenceC(h) = sech(μ), sech(μ)=1 ↔ μ=0 ↔ Re(s)=1/2.
 
+### ✓ Item 12: `riemannZeta_ne_zero_at_neg_odd_nat`
+**Route:** Bernoulli-value reduction + positive-even zeta contradiction.
+**Proof map:** See `Bernoulli trick proof map (riemannZeta_ne_zero_at_neg_odd_nat)` above.
+
+### ✓ Step-1 phase clause reduction
+**Route:** `step1_phase_velocity_identity_assumption` is replaced by
+`XiLogDerivFormula + slit` through
+`step1_reduced_frontier_holds_of_XiLogDerivFormula_and_slit`.
+**Endpoint wrapper:** `conditional_RH_via_window_limits_of_XiLogDerivFormula_and_slit`.
+
+### ✓ Item 3: `phase_velocity_on_critical_line`
+**Route:** Derived from `XiLogDerivFormula` (with slit admissibility) through
+`phase_velocity_on_critical_line_of_XiLogDerivFormula_and_slit`.
+**Status in roadmap:** discharged from the active-global-assumption list (consumed by Step-1 bridge theorem).
+
+### ✓ Item 8: `missingPrimeCore_cauchy_tail`
+**Route:** Consumed into Step-1 as
+`step1_tail_control_of_missingPrimeCore_cauchy_tail`.
+**Status in roadmap:** discharged from the active-global-assumption list.
+
+### ✓ Item 10: `partialEulerPhaseVelocity_window_tendsto`
+**Route:** Consumed into Step-1 as
+`step1_velocity_transfer_of_partialEulerPhaseVelocity_window_tendsto`.
+**Status in roadmap:** discharged from the active-global-assumption list.
+
 ---
 
 ## Remaining Items: Feasibility Assessment
+
+Historical item numbering is retained for cross-reference with earlier notes; discharged items are omitted.
 
 ### Tier 1: Classical Formulas (require Mathlib drop-ins or novel proofs)
 - **Item 1:** `xi_logderiv_formula` — ξ'/ξ = 1/s + 1/(s-1) - log(π)/2 + (1/2)ψ(s/2) + ζ'/ζ
@@ -152,10 +270,6 @@ Recommended order (dependency-first), now tracked as a checklist:
 - **Item 2:** `xi_logderiv_symmetry_sum` — (1/2)(ψ(s/2) + ψ((1-s)/2)) = log π - (ζ'/ζ(s) + ζ'/ζ(1-s))
   - *Status:* Consequence of ξ functional equation and digamma symmetry
   - *Feasibility:* Medium — requires functional equation + Mathlib digamma lemmas
-
-- **Item 3:** `phase_velocity_on_critical_line` — d/dt[log ξ(1/2 + it)] = i · core(t)
-  - *Status:* Chain rule applied to logarithmic derivative at s = 1/2 + it
-  - *Feasibility:* Medium-High — requires Lean 4 `deriv_comp` machinery and differentiability setup
 
 ### Tier 2: Functional Equation / Conjugation (deep analytic or from Mathlib)
 - **Item 5:** `completedHurwitzZetaEven_zero_conj_of_ne_zero` — conj(completed-Hurwitz-even(0,s)) = completed-Hurwitz-even(0,conj(s))
@@ -171,32 +285,24 @@ Recommended order (dependency-first), now tracked as a checklist:
   - *Status:* Defect "rigidity" away from critical line (opposite of convergence)
   - *Feasibility:* Low — requires novel contradiction argument or Mathlib asymptotic bounds
 
-- **Item 8:** `missingPrimeCore_cauchy_tail` — missing-primes partial cores form Cauchy sequence
-  - *Status:* Standard tail convergence (if Euler product converges, tail is Cauchy)
-  - *Feasibility:* Low-Medium — requires explicit convergence rates or Mathlib Filter.Tendsto machinery
-
-- **Item 10:** `partialEulerPhaseVelocity_window_tendsto` — windowed Euler velocity → ξ-core
-  - *Status:* Window-to-full limit for phase velocity
-  - *Feasibility:* Low-Medium — needs explicit window convergence, mirrors Item 6
-
-- **Item 11:** `zeta_zero_is_limit_of_window_zeros` — ζ zeros are limits of finite-window zeros
-  - *Status:* Analytic denseness via Hurwitz/Rouché or potential-theoretic argument
-  - *Feasibility:* Low — deep analytic theorem, likely requires the finalized LSeries machinery in Mathlib
+- **Item 11 (upstream source statement):** `zeta_zero_is_limit_of_window_zeros`
+  - *Status:* in this file, this is already theorem-level from the active Step-1 frontier (`step1_*` assumptions)
+  - *Feasibility:* remains analytically hard only if the frontier assumptions are to be fully discharged
 
 ---
 
 ## Recommended Next Steps
 
 **High-effort, high-impact:**
-- **Items 1–3:** Pursue Mathlib exploration for `deriv_log`, digamma symmetry (`Real.digamma_add`?), and reference ξ'/ξ formulas
+- **Items 1–2:** Pursue Mathlib exploration for `deriv_log`, digamma symmetry (`Real.digamma_add`?), and reference ξ'/ξ formulas
 - **Item 5:** Check if `Complex.Gamma_conj` + `hurwitzZetaEven` definitional properties suffice
 
 **Medium-effort, medium-impact:**
-- **Items 6, 8, 10:** Attempt explicit epsilontic proofs using `Filter.Tendsto` if time permits
+- **Item 6:** Attempt explicit epsilontic proofs using `Filter.Tendsto` if time permits
 
 **Lower priority (require significant novel mathematics):**
 - **Item 7:** Strip rigidity proof-by-contradiction (may require item 6 first)
-- **Item 11:** Analytic denseness (requires deep LSeries theory or Rouché-theorem machinery)
+- **Item 11 (if pushed below frontier assumptions):** Analytic denseness / Hurwitz-Rouché style strengthening
 
 **Practical strategy:**
 - Keep each discharged axiom as a theorem with the same name/signature first.
